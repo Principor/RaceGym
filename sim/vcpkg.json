@@ -2,6 +2,8 @@
   "name": "racegym-sim",
   "version-string": "0.1.0",
   "dependencies": [
-    "glfw3"
+    "glfw3",
+    "glm",
+    "glad"
   ]
 }

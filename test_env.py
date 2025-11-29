@@ -7,8 +7,15 @@ def demo(render_mode):
     env = gym.make("RaceGym-v0", render_mode=render_mode)
     obs, info = env.reset()
     print("Reset complete; sleeping briefly...")
-    # Let the window stay up briefly if human
-    time.sleep(2.0)
+    for step in range(300):
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        if render_mode is not None:
+            env.render()
+        time.sleep(1 / 60)
+        if terminated or truncated:
+            print(f"Episode ended after {step + 1} steps.")
+            break
     env.close()
     print("Closed.")
 

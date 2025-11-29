@@ -11,8 +11,10 @@ add_library(racegym_sim SHARED
 
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
 
-target_link_libraries(racegym_sim PRIVATE glfw OpenGL::GL)
+target_link_libraries(racegym_sim PRIVATE glfw OpenGL::GL glm::glm glad::glad)
 
 if(MSVC)
     target_compile_definitions(racegym_sim PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
