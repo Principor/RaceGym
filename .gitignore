@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CMake build artifacts
+sim/build/
+sim/out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.dir/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Compiled binaries and libraries
+*.dll
+*.exe
+*.lib
+*.exp
+*.pdb
+*.obj
+*.o
+*.a
+*.dylib
+
+# vcpkg
+sim/vcpkg_installed/
+sim/build/vcpkg_installed/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp

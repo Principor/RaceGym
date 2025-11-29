@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "racegym"
+version = "0.1.0"
+description = "Minimal Gymnasium environment that connects to a C++ sim DLL"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+authors = [{ name = "RaceGym" }]
+dependencies = [
+  "gymnasium>=0.29",
+  "numpy>=1.24",
+]
+
+[project.urls]
+Homepage = "https://example.local/racegym"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["racegym*"]
