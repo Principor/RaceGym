@@ -14,6 +14,20 @@
 
 namespace {
 
+struct Camera {
+        glm::vec3 position;
+        float yaw;   // left/right
+        float pitch; // up/down
+        float speed;
+        float sensitivity;
+        bool rightMouseDown;
+        float lastX, lastY;
+        bool firstMouse;
+        Camera()
+                : position(0.0f, 10.0f, 30.0f), yaw(-90.0f), pitch(0.0f), speed(20.0f), sensitivity(0.1f),
+                    rightMouseDown(false), lastX(0.0f), lastY(0.0f), firstMouse(true) {}
+};
+
 struct SimContext {
     bool windowed;
     bool running;
@@ -28,11 +42,13 @@ struct SimContext {
     int locView;
     int locProjection;
     int locColor;
+    Camera camera;
     
     SimContext()
         : windowed(false), running(false), window(nullptr),
           vao(0), vbo(0), ebo(0), shaderProgram(0),
           locModel(-1), locView(-1), locProjection(-1), locColor(-1) {}
+                // Camera is default-initialized
 };
 
 static const char* kVertexShader = R"GLSL(
@@ -153,10 +169,13 @@ static void renderScene(SimContext* ctx) {
     // Camera & matrices
     const float aspect = static_cast<float>(display_w) / static_cast<float>(display_h);
     glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
-    glm::vec3 eye(0.0f, 10.0f, 30.0f);
-    glm::vec3 center(0.0f, 0.0f, 0.0f);
-    glm::vec3 up(0.0f, 1.0f, 0.0f);
-    glm::mat4 view = glm::lookAt(eye, center, up);
+    Camera& cam = ctx->camera;
+    glm::vec3 front;
+    front.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+    front.y = sin(glm::radians(cam.pitch));
+    front.z = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+    front = glm::normalize(front);
+    glm::mat4 view = glm::lookAt(cam.position, cam.position + front, glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4 model(1.0f);  // Identity for ground plane at origin
 
     glUseProgram(ctx->shaderProgram);
@@ -176,6 +195,68 @@ static void cleanupGraphics(SimContext* ctx) {
     if (ctx->vbo) { glDeleteBuffers(1, &ctx->vbo); ctx->vbo = 0; }
     if (ctx->vao) { glDeleteVertexArrays(1, &ctx->vao); ctx->vao = 0; }
     if (ctx->shaderProgram) { glDeleteProgram(ctx->shaderProgram); ctx->shaderProgram = 0; }
+}
+
+// Camera input helpers
+static void processCameraInput(SimContext* ctx, float deltaTime) {
+    Camera& cam = ctx->camera;
+    GLFWwindow* window = ctx->window;
+    glm::vec3 front;
+    front.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+    front.y = sin(glm::radians(cam.pitch));
+    front.z = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+    front = glm::normalize(front);
+    glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
+    glm::vec3 up = glm::normalize(glm::cross(right, front));
+
+    float velocity = cam.speed * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cam.position += front * velocity;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cam.position -= front * velocity;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cam.position -= right * velocity;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cam.position += right * velocity;
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        cam.position += up * velocity;
+    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+        cam.position -= up * velocity;
+}
+
+static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    SimContext* ctx = static_cast<SimContext*>(glfwGetWindowUserPointer(window));
+    if (!ctx) return;
+    if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+        if (action == GLFW_PRESS) {
+            ctx->camera.rightMouseDown = true;
+            ctx->camera.firstMouse = true;
+        } else if (action == GLFW_RELEASE) {
+            ctx->camera.rightMouseDown = false;
+        }
+    }
+}
+
+static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+    SimContext* ctx = static_cast<SimContext*>(glfwGetWindowUserPointer(window));
+    if (!ctx) return;
+    Camera& cam = ctx->camera;
+    if (!cam.rightMouseDown) return;
+    if (cam.firstMouse) {
+        cam.lastX = (float)xpos;
+        cam.lastY = (float)ypos;
+        cam.firstMouse = false;
+    }
+    float xoffset = (float)xpos - cam.lastX;
+    float yoffset = cam.lastY - (float)ypos; // reversed: y ranges bottom to top
+    cam.lastX = (float)xpos;
+    cam.lastY = (float)ypos;
+    xoffset *= cam.sensitivity;
+    yoffset *= cam.sensitivity;
+    cam.yaw -= xoffset;
+    cam.pitch -= yoffset;
+    if (cam.pitch > 89.0f) cam.pitch = 89.0f;
+    if (cam.pitch < -89.0f) cam.pitch = -89.0f;
 }
 
 } // namespace
@@ -208,6 +289,10 @@ RACEGYM_API void* sim_init(int windowed) {
         glfwMakeContextCurrent(ctx->window);
         glfwSwapInterval(1);
         
+        // Set up input callbacks for camera
+        glfwSetWindowUserPointer(ctx->window, ctx);
+        glfwSetMouseButtonCallback(ctx->window, mouseButtonCallback);
+        glfwSetCursorPosCallback(ctx->window, cursorPosCallback);
         // Initialize GL loader and resources
         if (!initGraphics(ctx)) {
             glfwDestroyWindow(ctx->window);
@@ -234,7 +319,12 @@ RACEGYM_API void sim_step(void* sim_context) {
         }
         
         glfwPollEvents();
-        
+        // Camera movement: estimate deltaTime for smooth movement
+        static double lastTime = glfwGetTime();
+        double now = glfwGetTime();
+        float deltaTime = static_cast<float>(now - lastTime);
+        lastTime = now;
+        processCameraInput(ctx, deltaTime);
         // Render the scene
         renderScene(ctx);
         glfwSwapBuffers(ctx->window);
