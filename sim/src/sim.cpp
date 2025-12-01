@@ -23,9 +23,10 @@ struct Camera {
         bool rightMouseDown;
         float lastX, lastY;
         bool firstMouse;
+        glm::vec3 direction;
         Camera()
-                : position(0.0f, 10.0f, 30.0f), yaw(-90.0f), pitch(0.0f), speed(20.0f), sensitivity(0.1f),
-                    rightMouseDown(false), lastX(0.0f), lastY(0.0f), firstMouse(true) {}
+                : position(0.0f, 30.0f, 0.0f), yaw(0.0f), pitch(0.0f), speed(20.0f), sensitivity(0.1f),
+                    rightMouseDown(false), lastX(0.0f), lastY(0.0f), firstMouse(true), direction(0,0,1) {}
 };
 
 struct SimContext {
@@ -129,12 +130,13 @@ static bool initGraphics(SimContext* ctx) {
     ctx->locProjection = glGetUniformLocation(ctx->shaderProgram, "uProjection");
     ctx->locColor = glGetUniformLocation(ctx->shaderProgram, "uColor");
 
-    // Ground plane geometry: 2 triangles forming a 100x100 quad at y=0
+    // Simple ground plane
+    const float planeSize = 1000.0f;
     const float vertices[] = {
-        -50.0f, 0.0f, -50.0f,
-         50.0f, 0.0f, -50.0f,
-         50.0f, 0.0f,  50.0f,
-        -50.0f, 0.0f,  50.0f,
+             0.0f, 0.0f,      0.0f,
+        planeSize, 0.0f,      0.0f,
+        planeSize, 0.0f, planeSize,
+             0.0f, 0.0f, planeSize,
     };
     const unsigned int indices[] = { 0, 1, 2, 0, 2, 3 };
 
@@ -169,13 +171,10 @@ static void renderScene(SimContext* ctx) {
     // Camera & matrices
     const float aspect = static_cast<float>(display_w) / static_cast<float>(display_h);
     glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 1000.0f);
+    projection[0][0] *= -1; // Invert X for GLM's RH coordinate system
     Camera& cam = ctx->camera;
-    glm::vec3 front;
-    front.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
-    front.y = sin(glm::radians(cam.pitch));
-    front.z = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
-    front = glm::normalize(front);
-    glm::mat4 view = glm::lookAt(cam.position, cam.position + front, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 view = glm::lookAt(cam.position, cam.position + cam.direction, glm::vec3(0.0f, 1.0f, 0.0f));
+
     glm::mat4 model(1.0f);  // Identity for ground plane at origin
 
     glUseProgram(ctx->shaderProgram);
@@ -201,19 +200,14 @@ static void cleanupGraphics(SimContext* ctx) {
 static void processCameraInput(SimContext* ctx, float deltaTime) {
     Camera& cam = ctx->camera;
     GLFWwindow* window = ctx->window;
-    glm::vec3 front;
-    front.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
-    front.y = sin(glm::radians(cam.pitch));
-    front.z = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
-    front = glm::normalize(front);
-    glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
-    glm::vec3 up = glm::normalize(glm::cross(right, front));
+    glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), cam.direction));
+    glm::vec3 up = glm::normalize(glm::cross(cam.direction, right));
 
     float velocity = cam.speed * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        cam.position += front * velocity;
+        cam.position += cam.direction * velocity;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        cam.position -= front * velocity;
+        cam.position -= cam.direction * velocity;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
         cam.position -= right * velocity;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
@@ -257,6 +251,9 @@ static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     cam.pitch -= yoffset;
     if (cam.pitch > 89.0f) cam.pitch = 89.0f;
     if (cam.pitch < -89.0f) cam.pitch = -89.0f;
+    cam.direction.x = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+    cam.direction.y = sin(glm::radians(cam.pitch));
+    cam.direction.z = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
 }
 
 } // namespace
