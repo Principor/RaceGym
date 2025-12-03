@@ -1,0 +1,28 @@
+#ifndef TRACK_H
+
+#define TRACK_H
+
+#include <vector>
+#include <glm/glm.hpp>
+
+class Track {
+    std::vector<glm::vec2> points;
+    int numSegments;
+
+    int numIndices;
+    unsigned int vao, vbo, ebo;
+
+    bool loadPointsFromFile(const char* path);
+    void generateGeometry();
+
+public:
+    Track(const char* path);
+    ~Track();
+
+    void draw(int locModel, int locColor);
+    glm::vec2 getPosition(float t);
+    glm::vec2 getTangent(float t);
+    glm::vec2 getNormal(float t);
+};
+
+#endif // TRACK_H

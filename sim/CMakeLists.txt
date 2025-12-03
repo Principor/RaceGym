@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(racegym_sim SHARED 
     src/sim.cpp
     src/sim.h
+    src/track.cpp
+    src/track.h
 )
 
 find_package(glfw3 CONFIG REQUIRED)

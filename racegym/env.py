@@ -50,6 +50,18 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_step.restype = None
         self._dll.sim_shutdown.argtypes = [ctypes.c_void_p]
         self._dll.sim_shutdown.restype = None
+        print(f"Has attribute sim_load_track: {hasattr(self._dll, 'sim_load_track')}")
+        self._dll.sim_load_track.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        self._dll.sim_load_track.restype = None
+
+    def _load_track(self, name: str):
+        if self._dll is None or self._sim_context is None:
+            raise RuntimeError("DLL or simulation context not initialized")
+        path = Path(__file__).resolve().parents[1] / "tracks" / f"{name}.json"
+        if not path.is_file():
+            raise FileNotFoundError(f"Track file not found: {path}")
+        encoded = str(path).encode('utf-8')
+        self._dll.sim_load_track(self._sim_context, encoded)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
@@ -63,6 +75,7 @@ class RaceGymEnv(gym.Env):
         self._sim_context = self._dll.sim_init(windowed)
         if self._sim_context is None:
             raise RuntimeError("sim_init failed - returned null context")
+        self._load_track("track1")
         obs = np.zeros((1,), dtype=np.float32)
         info = {}
         return obs, info

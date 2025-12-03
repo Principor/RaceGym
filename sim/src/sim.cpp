@@ -10,7 +10,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <cmath>
 #include <string>
+#include <vector>
 #include <iostream>
+#include "track.h"
 
 namespace {
 
@@ -34,6 +36,8 @@ struct SimContext {
     bool running;
     GLFWwindow* window;
 
+    Track *track;
+
     // GL resources
     unsigned int vao;
     unsigned int vbo;
@@ -46,9 +50,10 @@ struct SimContext {
     Camera camera;
     
     SimContext()
-        : windowed(false), running(false), window(nullptr),
+        : windowed(false), running(false), window(nullptr), track(nullptr),
           vao(0), vbo(0), ebo(0), shaderProgram(0),
-          locModel(-1), locView(-1), locProjection(-1), locColor(-1) {}
+          locModel(-1), locView(-1), locProjection(-1), locColor(-1)
+          {}
                 // Camera is default-initialized
 };
 
@@ -184,9 +189,20 @@ static void renderScene(SimContext* ctx) {
     // Light green grass color
     glUniform3f(ctx->locColor, 144.0f/255.0f, 238.0f/255.0f, 144.0f/255.0f);
 
+    // Push ground plane back in depth so everything else renders on top
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(1.0f, 1.0f);
+
     glBindVertexArray(ctx->vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
+
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    
+    // Render track if loaded
+    if (ctx->track) {
+        ctx->track->draw(ctx->locModel, ctx->locColor);
+    }
 }
 
 static void cleanupGraphics(SimContext* ctx) {
@@ -203,7 +219,7 @@ static void processCameraInput(SimContext* ctx, float deltaTime) {
     glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), cam.direction));
     glm::vec3 up = glm::normalize(glm::cross(cam.direction, right));
 
-    float velocity = cam.speed * deltaTime;
+    float velocity = cam.speed * deltaTime * (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 5.0f : 1.0f);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         cam.position += cam.direction * velocity;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -347,7 +363,30 @@ RACEGYM_API void sim_shutdown(void* sim_context) {
         glfwTerminate();
     }
     
+    if (ctx->track) {
+        delete ctx->track;
+        ctx->track = nullptr;
+    }
+    
     delete ctx;
+}
+
+RACEGYM_API void sim_load_track(void* sim_context, const char* path) {
+    if (!sim_context || !path) {
+        return;
+    }
+    
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    
+    // Here we would load the track data from the specified file path
+    // For now, we will just print the path to indicate this function was called
+    std::cout << "Loading track from: " << path << std::endl;
+
+    if(ctx->track) {
+        delete ctx->track;
+    }
+
+    ctx->track = new Track(path);
 }
 
 }

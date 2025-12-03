@@ -34,6 +34,15 @@ RACEGYM_API void sim_step(void* sim_context);
  */
 RACEGYM_API void sim_shutdown(void* sim_context);
 
+/**
+ * Load a track from a JSON file into the simulation.
+ * 
+ * @param sim_context Pointer to simulation context returned by sim_init
+ * @param path Path to the JSON file containing track data
+ * @return 0 on success, non-zero on failure
+ */
+RACEGYM_API void sim_load_track(void* sim_context, const char* path);
+
 #ifdef __cplusplus
 }
 #endif
