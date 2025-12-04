@@ -9,6 +9,10 @@ add_library(racegym_sim SHARED
     src/sim.h
     src/track.cpp
     src/track.h
+    src/physics.cpp
+    src/physics.h
+    src/vehicle.cpp
+    src/vehicle.h
 )
 
 find_package(glfw3 CONFIG REQUIRED)

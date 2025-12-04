@@ -13,6 +13,8 @@
 #include <vector>
 #include <iostream>
 #include "track.h"
+#include "physics.h"
+#include "vehicle.h"
 
 namespace {
 
@@ -36,6 +38,9 @@ struct SimContext {
     bool running;
     GLFWwindow* window;
 
+    PhysicsWorld physicsWorld;
+
+    Vehicle *vehicle;
     Track *track;
 
     // GL resources
@@ -50,7 +55,7 @@ struct SimContext {
     Camera camera;
     
     SimContext()
-        : windowed(false), running(false), window(nullptr), track(nullptr),
+        : windowed(false), running(false), window(nullptr), track(nullptr), vehicle(nullptr),
           vao(0), vbo(0), ebo(0), shaderProgram(0),
           locModel(-1), locView(-1), locProjection(-1), locColor(-1)
           {}
@@ -199,9 +204,12 @@ static void renderScene(SimContext* ctx) {
 
     glDisable(GL_POLYGON_OFFSET_FILL);
     
-    // Render track if loaded
     if (ctx->track) {
         ctx->track->draw(ctx->locModel, ctx->locColor);
+    }
+
+    if (ctx->vehicle) {
+        ctx->vehicle->draw(ctx->locModel, ctx->locColor);
     }
 }
 
@@ -325,6 +333,17 @@ RACEGYM_API void sim_step(void* sim_context) {
     
     SimContext* ctx = static_cast<SimContext*>(sim_context);
     
+    float velBefore = ctx->vehicle->body->velocity.y;
+
+    for(int i = 0; i < 10; i++)
+    {
+        const float substepDelta = 1.0f / 600.0f; // 10 substeps for 60Hz
+        ctx->physicsWorld.stepSimulation(substepDelta); // Fixed timestep for now
+        if (ctx->vehicle) {
+            ctx->vehicle->step(substepDelta);
+        }
+    }
+
     if (ctx->windowed && ctx->window && ctx->running) {
         if (glfwWindowShouldClose(ctx->window)) {
             ctx->running = false;
@@ -389,4 +408,27 @@ RACEGYM_API void sim_load_track(void* sim_context, const char* path) {
     ctx->track = new Track(path);
 }
 
+RACEGYM_API void sim_add_vehicle(void* sim_context) {
+    if (!sim_context) {
+        return;
+    }
+    
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    
+    if(!ctx->track) {
+        std::cerr << "Cannot add vehicle: no track loaded." << std::endl;
+        return;
+    }
+
+    if(ctx->vehicle) {
+        delete ctx->vehicle;
+    }
+
+    glm::vec2 startPos = ctx->track->getPosition(0);
+    glm::vec2 startTangent = ctx->track->getTangent(0);
+    float startAngle = atan2(startTangent.x, startTangent.y);    
+
+    ctx->vehicle = new Vehicle(ctx->physicsWorld, glm::vec3(startPos.x, 2.0f, startPos.y), glm::vec3(0.0f, startAngle, 0.0f));
 }
+
+} // extern "C"

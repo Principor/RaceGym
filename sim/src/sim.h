@@ -43,6 +43,13 @@ RACEGYM_API void sim_shutdown(void* sim_context);
  */
 RACEGYM_API void sim_load_track(void* sim_context, const char* path);
 
+/**
+ * Add a vehicle to the simulation at the default starting position.
+ * 
+ * @param sim_context Pointer to simulation context returned by sim_init
+ */
+RACEGYM_API void sim_add_vehicle(void* sim_context);
+
 #ifdef __cplusplus
 }
 #endif
