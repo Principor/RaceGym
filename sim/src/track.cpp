@@ -4,6 +4,8 @@
 #include <string>
 #include <cctype>
 #include <iostream>
+#include <limits>
+#include <vector>
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -376,4 +378,36 @@ float Track::getClosestT(const glm::vec2 &position)
 	}
 
 	return globalClosestT;
+}
+
+std::vector<glm::vec3> Track::getWaypoints(float currentT, int numWaypoints, float waypointSpacing)
+{
+	std::vector<glm::vec3> waypoints;
+	waypoints.reserve(numWaypoints * 2);
+
+	const float halfWidth = TRACK_WIDTH / 2.0f;
+
+	for (int i = 0; i < numWaypoints; ++i)
+	{
+		float t = currentT + static_cast<float>(i) * waypointSpacing;
+		
+		// Wrap around track
+		while (t >= static_cast<float>(numSegments))
+			t -= static_cast<float>(numSegments);
+		while (t < 0.0f)
+			t += static_cast<float>(numSegments);
+
+		glm::vec2 centerPos = getPosition(t);
+		glm::vec2 normal = getNormal(t);
+
+		// Left side of track
+		glm::vec2 leftPos = centerPos + normal * halfWidth;
+		waypoints.emplace_back(leftPos.x, 0.0f, leftPos.y);
+
+		// Right side of track
+		glm::vec2 rightPos = centerPos - normal * halfWidth;
+		waypoints.emplace_back(rightPos.x, 0.0f, rightPos.y);
+	}
+
+	return waypoints;
 }

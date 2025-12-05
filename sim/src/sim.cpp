@@ -45,9 +45,9 @@ struct SimContext {
     std::vector<Vehicle> vehicles;
 
     // GL resources
-    unsigned int vao;
-    unsigned int vbo;
-    unsigned int ebo;
+    unsigned int groundPlaneVao;
+    unsigned int groundPlaneVbo;
+    unsigned int groundPlaneEbo;
     unsigned int shaderProgram;
     int locModel;
     int locView;
@@ -55,10 +55,14 @@ struct SimContext {
     int locColor;
     Camera camera;
     
+    // Waypoint rendering
+    unsigned int waypointVao, waypointVbo, waypointEbo;
+    
     SimContext()
         : windowed(false), running(false), window(nullptr), track(nullptr),
-          vao(0), vbo(0), ebo(0), shaderProgram(0),
-          locModel(-1), locView(-1), locProjection(-1), locColor(-1)
+          groundPlaneVao(0), groundPlaneVbo(0), groundPlaneEbo(0), shaderProgram(0),
+          locModel(-1), locView(-1), locProjection(-1), locColor(-1),
+          waypointVao(0), waypointVbo(0), waypointEbo(0)
           {}
                 // Camera is default-initialized
 };
@@ -151,21 +155,61 @@ static bool initGraphics(SimContext* ctx) {
     };
     const unsigned int indices[] = { 0, 1, 2, 0, 2, 3 };
 
-    glGenVertexArrays(1, &ctx->vao);
-    glGenBuffers(1, &ctx->vbo);
-    glGenBuffers(1, &ctx->ebo);
+    glGenVertexArrays(1, &ctx->groundPlaneVao);
+    glGenBuffers(1, &ctx->groundPlaneVbo);
+    glGenBuffers(1, &ctx->groundPlaneEbo);
 
-    glBindVertexArray(ctx->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, ctx->vbo);
+    glBindVertexArray(ctx->groundPlaneVao);
+    glBindBuffer(GL_ARRAY_BUFFER, ctx->groundPlaneVbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->groundPlaneEbo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
     glBindVertexArray(0);
+    
+    // Create waypoint cube mesh
+    glGenVertexArrays(1, &ctx->waypointVao);
+    glGenBuffers(1, &ctx->waypointVbo);
+    glGenBuffers(1, &ctx->waypointEbo);
+    
+    glBindVertexArray(ctx->waypointVao);
+    
+    // Unit cube vertices
+    const float cubeVertices[] = {
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
+    };
+    
+    const unsigned int cubeIndices[] = {
+        0, 1, 2, 2, 3, 0,  // back
+        4, 5, 6, 6, 7, 4,  // front
+        0, 1, 5, 5, 4, 0,  // bottom
+        2, 3, 7, 7, 6, 2,  // top
+        0, 3, 7, 7, 4, 0,  // left
+        1, 2, 6, 6, 5, 1,  // right
+    };
+    
+    glBindBuffer(GL_ARRAY_BUFFER, ctx->waypointVbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->waypointEbo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
+    
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    
+    glBindVertexArray(0);
+    
     return true;
 }
 
@@ -199,7 +243,7 @@ static void renderScene(SimContext* ctx) {
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.0f, 1.0f);
 
-    glBindVertexArray(ctx->vao);
+    glBindVertexArray(ctx->groundPlaneVao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 
@@ -212,12 +256,39 @@ static void renderScene(SimContext* ctx) {
     for (auto& vehicle : ctx->vehicles) {
         vehicle.draw(ctx->locModel, ctx->locColor);
     }
+    
+    // Draw waypoints
+    if (!ctx->vehicles.empty()) {
+        glUseProgram(ctx->shaderProgram);
+        glUniform3f(ctx->locColor, 1.0f, 1.0f, 0.0f); // Yellow color
+        
+        glBindVertexArray(ctx->waypointVao);
+        
+        const float size = 0.3f;
+
+        Vehicle &vehicle = ctx->vehicles[0];
+        glm::vec2 vehiclePos2D = glm::vec2(vehicle.body->position.x, vehicle.body->position.z);
+        const float currentT = ctx->track->getClosestT(vehiclePos2D);
+
+        for (const auto& waypoint : ctx->track->getWaypoints(currentT, 20, 0.1f)) {
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), waypoint);
+            model = glm::scale(model, glm::vec3(size));
+            glUniformMatrix4fv(ctx->locModel, 1, GL_FALSE, glm::value_ptr(model));
+            
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        }
+        
+        glBindVertexArray(0);
+    }
 }
 
 static void cleanupGraphics(SimContext* ctx) {
-    if (ctx->ebo) { glDeleteBuffers(1, &ctx->ebo); ctx->ebo = 0; }
-    if (ctx->vbo) { glDeleteBuffers(1, &ctx->vbo); ctx->vbo = 0; }
-    if (ctx->vao) { glDeleteVertexArrays(1, &ctx->vao); ctx->vao = 0; }
+    if (ctx->waypointEbo) { glDeleteBuffers(1, &ctx->waypointEbo); ctx->waypointEbo = 0; }
+    if (ctx->waypointVbo) { glDeleteBuffers(1, &ctx->waypointVbo); ctx->waypointVbo = 0; }
+    if (ctx->waypointVao) { glDeleteVertexArrays(1, &ctx->waypointVao); ctx->waypointVao = 0; }
+    if (ctx->groundPlaneEbo) { glDeleteBuffers(1, &ctx->groundPlaneEbo); ctx->groundPlaneEbo = 0; }
+    if (ctx->groundPlaneVbo) { glDeleteBuffers(1, &ctx->groundPlaneVbo); ctx->groundPlaneVbo = 0; }
+    if (ctx->groundPlaneVao) { glDeleteVertexArrays(1, &ctx->groundPlaneVao); ctx->groundPlaneVao = 0; }
     if (ctx->shaderProgram) { glDeleteProgram(ctx->shaderProgram); ctx->shaderProgram = 0; }
 }
 

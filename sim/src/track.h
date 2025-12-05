@@ -24,6 +24,7 @@ public:
     glm::vec2 getTangent(float t);
     glm::vec2 getNormal(float t);
     float getClosestT(const glm::vec2& position);
+    std::vector<glm::vec3> getWaypoints(float currentT, int numWaypoints, float waypointSpacing);
     int getNumSegments() const { return numSegments; }
 };
 
