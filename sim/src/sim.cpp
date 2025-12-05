@@ -438,4 +438,34 @@ RACEGYM_API void sim_set_vehicle_control(void* vehicle_ptr, float steer, float t
     vehicle->setBrake(brake);         // 0.0 to 1.0
 }
 
+RACEGYM_API float sim_get_vehicle_track_position(void* sim_context, void* vehicle_ptr) {
+    if (!sim_context || !vehicle_ptr) {
+        return 0.0f;
+    }
+
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    if (!ctx->track) {
+        return 0.0f;
+    }
+
+    Vehicle* vehicle = static_cast<Vehicle*>(vehicle_ptr);
+    glm::vec3 vehiclePos = vehicle->body->position;
+    glm::vec2 vehiclePos2D(vehiclePos.x, vehiclePos.z);
+
+    return ctx->track->getClosestT(vehiclePos2D);
+}
+
+RACEGYM_API int sim_get_track_length(void* sim_context) {
+    if (!sim_context) {
+        return 0;
+    }
+
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    if (!ctx->track) {
+        return 0;
+    }
+
+    return ctx->track->getNumSegments();
+}
+
 } // extern "C"

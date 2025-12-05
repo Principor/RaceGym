@@ -23,6 +23,8 @@ public:
     glm::vec2 getPosition(float t);
     glm::vec2 getTangent(float t);
     glm::vec2 getNormal(float t);
+    float getClosestT(const glm::vec2& position);
+    int getNumSegments() const { return numSegments; }
 };
 
 #endif // TRACK_H

@@ -34,6 +34,8 @@ class RaceGymEnv(gym.Env):
         self._dll: ctypes.CDLL | None = None
         self._sim_context: ctypes.c_void_p | None = None
         self._vehicle: ctypes.c_void_p | None = None
+        self._track_length: int = 0
+        self._last_track_position: float = 0.0
 
     def _load_dll(self):
         if self._dll is not None:
@@ -57,6 +59,10 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_add_vehicle.restype = ctypes.c_void_p
         self._dll.sim_set_vehicle_control.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self._dll.sim_set_vehicle_control.restype = None
+        self._dll.sim_get_vehicle_track_position.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self._dll.sim_get_vehicle_track_position.restype = ctypes.c_float
+        self._dll.sim_get_track_length.argtypes = [ctypes.c_void_p]
+        self._dll.sim_get_track_length.restype = ctypes.c_int
 
     def _load_track(self, name: str):
         if self._dll is None or self._sim_context is None:
@@ -81,6 +87,8 @@ class RaceGymEnv(gym.Env):
             raise RuntimeError("sim_init failed - returned null context")
         self._load_track("track1")
         self._vehicle = self._dll.sim_add_vehicle(self._sim_context)
+        self._track_length = self._dll.sim_get_track_length(self._sim_context)
+        self._last_track_position = 0.0
         obs = np.zeros((1,), dtype=np.float32)
         info = {}
         return obs, info
@@ -89,11 +97,28 @@ class RaceGymEnv(gym.Env):
         if self._dll is not None and self._sim_context is not None:
             self._dll.sim_set_vehicle_control(self._vehicle, ctypes.c_float(action[0]), ctypes.c_float(action[1]), ctypes.c_float(-action[1]))
             self._dll.sim_step(self._sim_context)
+        
+        # Get current position along track
+        current_track_position = self._dll.sim_get_vehicle_track_position(self._sim_context, self._vehicle)
+        
+        # Calculate reward with wraparound handling
+        delta = current_track_position - self._last_track_position
+        
+        # Handle wraparound at track boundaries
+        if delta > self._track_length / 2:
+            # Wrapped backwards (e.g., from 0.1 to 9.9 on a 10-segment track)
+            delta -= self._track_length
+        elif delta < -self._track_length / 2:
+            # Wrapped forwards (e.g., from 9.9 to 0.1 on a 10-segment track)
+            delta += self._track_length
+        
+        reward = delta
+        self._last_track_position = current_track_position
+        
         obs = np.zeros((1,), dtype=np.float32)
-        reward = 0.0
         terminated = False
         truncated = False
-        info = {}
+        info = {'track_position': current_track_position}
         return obs, reward, terminated, truncated, info
 
     def render(self):

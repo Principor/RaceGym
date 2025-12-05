@@ -11,6 +11,7 @@ def demo(render_mode):
         frame_start = time.time()
         action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
+        print(f"Step {step}: reward={reward}, info={info}")
         if render_mode is not None:
             env.render()
         elapsed = time.time() - frame_start

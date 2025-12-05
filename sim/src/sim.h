@@ -60,6 +60,23 @@ RACEGYM_API void* sim_add_vehicle(void* sim_context);
  */
 RACEGYM_API void sim_set_vehicle_control(void* vehicle, float steer, float throttle, float brake);
 
+/**
+ * Get the vehicle's position along the track curve.
+ * 
+ * @param sim_context Pointer to simulation context
+ * @param vehicle_ptr Pointer to the vehicle
+ * @return Position along track curve in range [0, num_segments)
+ */
+RACEGYM_API float sim_get_vehicle_track_position(void* sim_context, void* vehicle_ptr);
+
+/**
+ * Get the length of the track in segments.
+ * 
+ * @param sim_context Pointer to simulation context
+ * @return Number of segments in the track
+ */
+RACEGYM_API int sim_get_track_length(void* sim_context);
+
 #ifdef __cplusplus
 }
 #endif

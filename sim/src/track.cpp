@@ -268,3 +268,112 @@ void Track::generateGeometry()
 
 	glBindVertexArray(0);
 }
+
+float Track::getClosestT(const glm::vec2 &position)
+{
+	float globalClosestT = 0.0f;
+	float globalMinDistSq = std::numeric_limits<float>::max();
+
+	// Check each segment independently
+	for (int seg = 0; seg < numSegments; ++seg)
+	{
+		// Get the three control points for this quadratic Bezier segment
+		glm::vec2 p0 = points[seg * 2];
+		glm::vec2 p1 = points[seg * 2 + 1];
+		glm::vec2 p2 = points[(seg * 2 + 2) % points.size()];
+
+		// Bezier curve: B(t) = (1-t)^2 * p0 + 2*(1-t)*t * p1 + t^2 * p2
+		// We want to minimize |B(t) - position|^2
+		// This is equivalent to finding where d/dt |B(t) - position|^2 = 0
+		
+		// Let Q = position
+		// B(t) = p0 + 2t(p1 - p0) + t^2(p0 - 2p1 + p2)
+		// B(t) - Q = (p0 - Q) + 2t(p1 - p0) + t^2(p0 - 2p1 + p2)
+		
+		// |B(t) - Q|^2 = dot(B(t) - Q, B(t) - Q)
+		// d/dt |B(t) - Q|^2 = 2 * dot(B(t) - Q, B'(t))
+		
+		// B'(t) = 2(p1 - p0) + 2t(p0 - 2p1 + p2)
+		
+		// Setting derivative to zero:
+		// dot(B(t) - Q, B'(t)) = 0
+		
+		// This expands to a cubic equation in t
+		// For simplicity and robustness, we'll use iterative refinement with Newton's method
+		// starting from multiple sample points
+		
+		glm::vec2 a = p0 - 2.0f * p1 + p2;  // coefficient of t^2
+		glm::vec2 b = 2.0f * (p1 - p0);      // coefficient of t
+		glm::vec2 c = p0 - position;         // constant term (offset from position)
+		
+		// Sample initial candidates and refine with Newton's method
+		float candidates[11]; // Start, end, and 9 intermediate points
+		int numCandidates = 11;
+		for (int i = 0; i < numCandidates; ++i)
+		{
+			candidates[i] = static_cast<float>(i) / static_cast<float>(numCandidates - 1);
+		}
+		
+		float segmentClosestT = 0.0f;
+		float segmentMinDistSq = std::numeric_limits<float>::max();
+		
+		for (int i = 0; i < numCandidates; ++i)
+		{
+			float t = candidates[i];
+			
+			// Newton's method iterations to find local minimum
+			for (int iter = 0; iter < 5; ++iter)
+			{
+				// B(t) - Q = c + t*b + t^2*a
+				glm::vec2 Bt = c + t * b + t * t * a;
+				
+				// B'(t) = b + 2*t*a
+				glm::vec2 dBt = b + 2.0f * t * a;
+				
+				// f(t) = dot(B(t) - Q, B'(t))
+				float f = glm::dot(Bt, dBt);
+				
+				// f'(t) = dot(B'(t), B'(t)) + dot(B(t) - Q, B''(t))
+				// B''(t) = 2*a
+				float df = glm::dot(dBt, dBt) + glm::dot(Bt, 2.0f * a);
+				
+				// Avoid division by zero
+				if (std::abs(df) < 1e-6f)
+					break;
+				
+				// Newton's step
+				float newT = t - f / df;
+				
+				// Clamp to [0, 1]
+				newT = std::max(0.0f, std::min(1.0f, newT));
+				
+				// Check convergence
+				if (std::abs(newT - t) < 1e-6f)
+					break;
+				
+				t = newT;
+			}
+			
+			// Evaluate distance at this t
+			glm::vec2 Bt = c + t * b + t * t * a;
+			float distSq = glm::dot(Bt, Bt);
+			
+			if (distSq < segmentMinDistSq)
+			{
+				segmentMinDistSq = distSq;
+				segmentClosestT = t;
+			}
+		}
+		
+		// Convert local t to global t
+		float globalT = static_cast<float>(seg) + segmentClosestT;
+		
+		if (segmentMinDistSq < globalMinDistSq)
+		{
+			globalMinDistSq = segmentMinDistSq;
+			globalClosestT = globalT;
+		}
+	}
+
+	return globalClosestT;
+}
