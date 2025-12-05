@@ -423,7 +423,7 @@ RACEGYM_API void* sim_add_vehicle(void* sim_context) {
     glm::vec2 startTangent = ctx->track->getTangent(0);
     float startAngle = atan2(startTangent.x, startTangent.y);    
 
-    ctx->vehicles.emplace_back(ctx->physicsWorld, glm::vec3(startPos.x, 2.0f, startPos.y), glm::vec3(0.0f, startAngle, 0.0f));
+    ctx->vehicles.emplace_back(ctx->physicsWorld, glm::vec3(startPos.x, 0.75f, startPos.y), glm::vec3(0.0f, startAngle, 0.0f));
     return &ctx->vehicles.back();
 }
 
@@ -466,6 +466,17 @@ RACEGYM_API int sim_get_track_length(void* sim_context) {
     }
 
     return ctx->track->getNumSegments();
+}
+
+RACEGYM_API int sim_is_vehicle_off_track(void* sim_context, void* vehicle_ptr) {
+    if (!sim_context || !vehicle_ptr) {
+        return 0;
+    }
+
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    Vehicle* vehicle = static_cast<Vehicle*>(vehicle_ptr);
+
+    return vehicle->isOffTrack(ctx->track) ? 1 : 0;
 }
 
 } // extern "C"

@@ -1,4 +1,5 @@
 #include "vehicle.h"
+#include "track.h"
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
@@ -31,6 +32,8 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
         wheels[i].inertia = 0.5f * 10.0f * WHEEL_RADIUS * WHEEL_RADIUS; // Assuming wheel mass of 10kg
         wheels[i].compression = 0.0f;
         wheels[i].angularVelocity = 0.0f;
+        wheels[i].lastContactPoint = glm::vec3(0.0f);
+        wheels[i].hasContact = false;
     }
     
     steerAmount = 0.0f;
@@ -133,14 +136,20 @@ void Vehicle::step(float deltaTime)
             continue; // axis parallel to ground, skip
         float t = -mountWorld.y / denom;
 
-        if (t < 0.0f)
+        if (t < 0.0f) {
+            wheels[i].hasContact = false;
             continue; // pointing away from ground
+        }
 
         // Limit to suspension reach
-        if (t > restLength)
+        if (t > restLength) {
+            wheels[i].hasContact = false;
             continue; // no contact within suspension
+        }
 
         glm::vec3 contactPoint = mountWorld + suspAxisWorld * t;
+        wheels[i].lastContactPoint = contactPoint;
+        wheels[i].hasContact = true;
 
         // Compression is how much shorter than rest the ray is
         float compression = restLength - t;
@@ -221,4 +230,38 @@ void Vehicle::setThrottle(float throttleInput)
 void Vehicle::setBrake(float brakeInput)
 {
     this->brake = std::clamp(brakeInput, 0.0f, 1.0f);
+}
+
+bool Vehicle::isOffTrack(Track* track) const
+{
+    if (!track)
+        return false;
+
+    const float TRACK_WIDTH = 12.0f; // Must match the TRACK_WIDTH in track.cpp
+    const float halfWidth = TRACK_WIDTH / 2.0f;
+
+    // Check if any wheel is on track
+    for (int i = 0; i < 4; ++i)
+    {
+        // Only consider wheels that have made contact at some point
+        if (!wheels[i].hasContact && glm::length(wheels[i].lastContactPoint) < 0.01f)
+            continue; // Wheel hasn't touched ground yet (start of episode)
+
+        glm::vec3 contactPoint = wheels[i].lastContactPoint;
+        glm::vec2 contactPoint2D(contactPoint.x, contactPoint.z);
+
+        // Find closest point on track centerline
+        float closestT = track->getClosestT(contactPoint2D);
+        glm::vec2 trackPoint = track->getPosition(closestT);
+
+        // Check distance from track centerline
+        float distanceFromCenter = glm::distance(contactPoint2D, trackPoint);
+
+        // If this wheel is within track bounds, vehicle is on track
+        if (distanceFromCenter <= halfWidth)
+            return false;
+    }
+
+    // All wheels are off track (or no wheels have contacted ground)
+    return true;
 }

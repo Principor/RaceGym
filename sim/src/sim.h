@@ -77,6 +77,15 @@ RACEGYM_API float sim_get_vehicle_track_position(void* sim_context, void* vehicl
  */
 RACEGYM_API int sim_get_track_length(void* sim_context);
 
+/**
+ * Check if the vehicle is off track.
+ * 
+ * @param sim_context Pointer to simulation context
+ * @param vehicle_ptr Pointer to the vehicle
+ * @return 1 if vehicle is off track, 0 otherwise
+ */
+RACEGYM_API int sim_is_vehicle_off_track(void* sim_context, void* vehicle_ptr);
+
 #ifdef __cplusplus
 }
 #endif

@@ -40,6 +40,8 @@ struct Wheel
     float steerAngle;
     float driveTorque;
     float brakeTorque;
+    glm::vec3 lastContactPoint; // Last point where wheel touched ground
+    bool hasContact; // Whether wheel is currently in contact
     
     // Calculate Pacejka Magic Formula
     float calculatePacejka(float slip, const PacejkaCoefficients &coeff, float normalForce) const
@@ -66,6 +68,7 @@ public:
     void setSteerAmount(float steer); // -1.0 to 1.0
     void setThrottle(float throttle); // 0.0 to 1.0
     void setBrake(float brake);       // 0.0 to 1.0
+    bool isOffTrack(class Track* track) const;
 
 private:
     // Rendering data

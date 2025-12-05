@@ -63,6 +63,8 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_get_vehicle_track_position.restype = ctypes.c_float
         self._dll.sim_get_track_length.argtypes = [ctypes.c_void_p]
         self._dll.sim_get_track_length.restype = ctypes.c_int
+        self._dll.sim_is_vehicle_off_track.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self._dll.sim_is_vehicle_off_track.restype = ctypes.c_int
 
     def _load_track(self, name: str):
         if self._dll is None or self._sim_context is None:
@@ -115,10 +117,13 @@ class RaceGymEnv(gym.Env):
         reward = delta
         self._last_track_position = current_track_position
         
+        # Check if vehicle is off track
+        is_off_track = self._dll.sim_is_vehicle_off_track(self._sim_context, self._vehicle)
+        terminated = bool(is_off_track)
+        
         obs = np.zeros((1,), dtype=np.float32)
-        terminated = False
         truncated = False
-        info = {'track_position': current_track_position}
+        info = {'track_position': current_track_position, 'off_track': terminated}
         return obs, reward, terminated, truncated, info
 
     def render(self):
