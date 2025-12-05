@@ -48,7 +48,17 @@ RACEGYM_API void sim_load_track(void* sim_context, const char* path);
  * 
  * @param sim_context Pointer to simulation context returned by sim_init
  */
-RACEGYM_API void sim_add_vehicle(void* sim_context);
+RACEGYM_API void* sim_add_vehicle(void* sim_context);
+
+/**
+ * Set control inputs for the specified vehicle.
+ * 
+ * @param vehicle Pointer to the vehicle returned by sim_add_vehicle
+ * @param steer Steering input in range [-1.0, 1.0]
+ * @param throttle Throttle input in range [0.0, 1.0]
+ * @param brake Brake input in range [0.0, 1.0]
+ */
+RACEGYM_API void sim_set_vehicle_control(void* vehicle, float steer, float throttle, float brake);
 
 #ifdef __cplusplus
 }

@@ -29,10 +29,11 @@ class RaceGymEnv(gym.Env):
         assert render_mode in ("human", None), "render_mode must be 'human' or None"
         self.render_mode = render_mode
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
 
         self._dll: ctypes.CDLL | None = None
         self._sim_context: ctypes.c_void_p | None = None
+        self._vehicle: ctypes.c_void_p | None = None
 
     def _load_dll(self):
         if self._dll is not None:
@@ -53,7 +54,9 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_load_track.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         self._dll.sim_load_track.restype = None
         self._dll.sim_add_vehicle.argtypes = [ctypes.c_void_p]
-        self._dll.sim_add_vehicle.restype = None
+        self._dll.sim_add_vehicle.restype = ctypes.c_void_p
+        self._dll.sim_set_vehicle_control.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self._dll.sim_set_vehicle_control.restype = None
 
     def _load_track(self, name: str):
         if self._dll is None or self._sim_context is None:
@@ -77,13 +80,14 @@ class RaceGymEnv(gym.Env):
         if self._sim_context is None:
             raise RuntimeError("sim_init failed - returned null context")
         self._load_track("track1")
-        self._dll.sim_add_vehicle(self._sim_context)
+        self._vehicle = self._dll.sim_add_vehicle(self._sim_context)
         obs = np.zeros((1,), dtype=np.float32)
         info = {}
         return obs, info
 
     def step(self, action):
         if self._dll is not None and self._sim_context is not None:
+            self._dll.sim_set_vehicle_control(self._vehicle, ctypes.c_float(action[0]), ctypes.c_float(action[1]), ctypes.c_float(-action[1]))
             self._dll.sim_step(self._sim_context)
         obs = np.zeros((1,), dtype=np.float32)
         reward = 0.0

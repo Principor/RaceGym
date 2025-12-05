@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
+#include <algorithm>
 
 Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation)
 {
@@ -14,10 +15,10 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
     body = world.addBody(boxShape, VEHICLE_MASS, position, orientation);
 
     std::vector<glm::vec3> wheelPositions = {
-        glm::vec3(+VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, +VEHICLE_DIMENSIONS.z * 0.5f),
-        glm::vec3(-VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, +VEHICLE_DIMENSIONS.z * 0.5f),
-        glm::vec3(+VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, -VEHICLE_DIMENSIONS.z * 0.5f),
-        glm::vec3(-VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, -VEHICLE_DIMENSIONS.z * 0.5f)
+        glm::vec3(+VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, +VEHICLE_DIMENSIONS.z * 0.5f),  // Front-Right
+        glm::vec3(-VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, +VEHICLE_DIMENSIONS.z * 0.5f),  // Front-Left
+        glm::vec3(+VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, -VEHICLE_DIMENSIONS.z * 0.5f),  // Rear-Right
+        glm::vec3(-VEHICLE_DIMENSIONS.x * 0.5f, WHEEL_RADIUS - VEHICLE_DIMENSIONS.y * 0.5f, -VEHICLE_DIMENSIONS.z * 0.5f)   // Rear-Left
     };
     for(int i = 0; i < 4; ++i)
     {
@@ -27,9 +28,14 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
         wheels[i].wheelRadius = WHEEL_RADIUS;
         wheels[i].suspensionStiffness = SUSPENSION_STIFFNESS;
         wheels[i].suspensionDamping = SUSPENSION_DAMPING;
+        wheels[i].inertia = 0.5f * 10.0f * WHEEL_RADIUS * WHEEL_RADIUS; // Assuming wheel mass of 10kg
         wheels[i].compression = 0.0f;
+        wheels[i].angularVelocity = 0.0f;
     }
     
+    steerAmount = 0.0f;
+    throttle = 0.0f;
+    brake = 0.0f;
 
     // Create a simple box for rendering
     float w = VEHICLE_DIMENSIONS.x;
@@ -92,6 +98,26 @@ void Vehicle::step(float deltaTime)
     // Suspension axis is local -Y; rotate to world using quaternion
     glm::vec3 suspAxisWorld = body->orientation * glm::vec3(0.0f, -1.0f, 0.0f);
 
+    wheels[0].steerAngle = steerAmount * glm::radians(30.0f); // Front-Right
+    wheels[1].steerAngle = steerAmount * glm::radians(30.0f); // Front-Left
+    wheels[2].steerAngle = 0.0f; // Rear-Right
+    wheels[3].steerAngle = 0.0f; // Rear-Left
+
+    float engineAngularVelocity = (wheels[2].angularVelocity + wheels[3].angularVelocity) / 2; // Simple average
+    float enginePower = throttle * 110000.0f; // Max 110kW
+    float engineTorque = glm::min(enginePower / glm::max(engineAngularVelocity, 1.0f), 3000.0f); // Limit max torque to 3000Nm
+    float driveTorque = engineTorque * 0.5f; // Split torque to rear wheels
+    wheels[0].driveTorque = 0.0f;
+    wheels[1].driveTorque = 0.0f;
+    wheels[2].driveTorque = driveTorque;
+    wheels[3].driveTorque = driveTorque;
+
+    float brakeTorque = brake * 2000.0f; // Max 2000Nm per wheel
+    wheels[0].brakeTorque = brakeTorque;
+    wheels[1].brakeTorque = brakeTorque;
+    wheels[2].brakeTorque = brakeTorque;
+    wheels[3].brakeTorque = brakeTorque;
+
     // Simple spring-damper parameters
     float restLength = SUSPENSION_TRAVEL + WHEEL_RADIUS; // ray length from mount
     float k = SUSPENSION_STIFFNESS; // N/m spring stiffness
@@ -125,11 +151,49 @@ void Vehicle::step(float deltaTime)
 
         // Ground normal for y=0 plane
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
-        glm::vec3 force = normal * forceMag;
+        glm::vec3 suspensionForce = normal * forceMag;
 
+        // Calculate tire forces using Pacejka Magic Formula
+        // Get wheel world orientation (including steer angle)
+        glm::quat steerQuat = glm::angleAxis(wheels[i].steerAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::quat wheelOrientation = body->orientation * steerQuat;
+        
+        // Forward and side directions in world space
+        glm::vec3 forwardDir = wheelOrientation * glm::vec3(0.0f, 0.0f, 1.0f);
+        glm::vec3 sideDir = wheelOrientation * glm::vec3(1.0f, 0.0f, 0.0f);
+        
+        // Velocity at contact point
+        glm::vec3 r = contactPoint - body->position;
+        glm::vec3 contactVelocity = body->velocity + glm::cross(body->angularVelocity, r);
+        
+        // Project velocity onto forward and side directions
+        float forwardSpeed = glm::dot(contactVelocity, forwardDir);
+        float sideSpeed = glm::dot(contactVelocity, sideDir);
+        // Calculate slip ratio (longitudinal slip)
+        float wheelCircumSpeed = wheels[i].angularVelocity * wheels[i].wheelRadius;
+        float slipRatio = (wheelCircumSpeed - forwardSpeed) / std::max(glm::abs(forwardSpeed), 0.1f);
+        // Calculate slip angle (lateral slip)
+        float slipAngle  = glm::atan(-sideSpeed / std::max(glm::abs(forwardSpeed), 0.1f));
+        
+        // Apply Pacejka Magic Formula
+        float normalForce = forceMag;
+        float longitudinalForce = wheels[i].calculatePacejka(slipRatio, PACEJKA_LONG, normalForce);
+        float lateralForce = wheels[i].calculatePacejka(slipAngle, PACEJKA_LAT, normalForce);
+    
+        // Combine forces in world space
+        glm::vec3 tireForce = suspensionForce + forwardDir * longitudinalForce + sideDir * lateralForce;
+        
         // Apply at contact point to induce correct torque
-        body->applyForceAtPoint(force, contactPoint);
+        body->applyForceAtPoint(tireForce, contactPoint);
+        
+        // Update wheel angular velocity
+        // Torque on wheel = driveTorque - brakeTorque - longitudinalForce * wheelRadius
+        float wheelTorque = wheels[i].driveTorque - wheels[i].brakeTorque - longitudinalForce * wheels[i].wheelRadius;
+        float angularAcceleration = wheelTorque / wheels[i].inertia;
+        wheels[i].angularVelocity += angularAcceleration * deltaTime;
     }
+
+    body->applyForce(-body->velocity * glm::length(body->velocity) * 0.3f); // Simple drag
 }
 
 void Vehicle::draw(int locModel, int locColor)
@@ -142,4 +206,19 @@ void Vehicle::draw(int locModel, int locColor)
     glBindVertexArray(vao);
     glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
+}
+
+void Vehicle::setSteerAmount(float steer)
+{
+    this->steerAmount = std::clamp(steer, -1.0f, 1.0f);
+}
+
+void Vehicle::setThrottle(float throttleInput)
+{
+    this->throttle = std::clamp(throttleInput, 0.0f, 1.0f);
+}
+
+void Vehicle::setBrake(float brakeInput)
+{
+    this->brake = std::clamp(brakeInput, 0.0f, 1.0f);
 }
