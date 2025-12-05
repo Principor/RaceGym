@@ -48,7 +48,15 @@ RACEGYM_API void sim_load_track(void* sim_context, const char* path);
  * 
  * @param sim_context Pointer to simulation context returned by sim_init
  */
-RACEGYM_API void* sim_add_vehicle(void* sim_context);
+RACEGYM_API void* sim_add_vehicle(void* sim_context, float spawn_t);
+
+/**
+ * Remove a vehicle from the simulation.
+ * 
+ * @param sim_context Pointer to simulation context returned by sim_init
+ * @param vehicle Pointer to the vehicle returned by sim_add_vehicle
+ */
+RACEGYM_API void sim_remove_vehicle(void* sim_context, void* vehicle);
 
 /**
  * Set control inputs for the specified vehicle.

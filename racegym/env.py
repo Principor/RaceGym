@@ -37,6 +37,17 @@ class RaceGymEnv(gym.Env):
         self._vehicle: ctypes.c_void_p | None = None
         self._track_length: int = 0
         self._last_track_position: float = 0.0
+        
+        self._load_dll()
+        if self._sim_context is not None:
+            self._dll.sim_shutdown(self._sim_context)
+            self._sim_context = None
+            # Give the DLL a moment to clean up
+            time.sleep(0.05)
+        windowed = 1 if self.render_mode == "human" else 0
+        self._sim_context = self._dll.sim_init(windowed)
+        if self._sim_context is None:
+            raise RuntimeError("sim_init failed - returned null context")
 
     def _load_dll(self):
         if self._dll is not None:
@@ -56,8 +67,10 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_shutdown.restype = None
         self._dll.sim_load_track.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         self._dll.sim_load_track.restype = None
-        self._dll.sim_add_vehicle.argtypes = [ctypes.c_void_p]
+        self._dll.sim_add_vehicle.argtypes = [ctypes.c_void_p, ctypes.c_float]
         self._dll.sim_add_vehicle.restype = ctypes.c_void_p
+        self._dll.sim_remove_vehicle.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self._dll.sim_remove_vehicle.restype = None
         self._dll.sim_set_vehicle_control.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self._dll.sim_set_vehicle_control.restype = None
         self._dll.sim_get_vehicle_track_position.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
@@ -80,18 +93,11 @@ class RaceGymEnv(gym.Env):
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
-        self._load_dll()
-        if self._sim_context is not None:
-            self._dll.sim_shutdown(self._sim_context)
-            self._sim_context = None
-            # Give the DLL a moment to clean up
-            time.sleep(0.05)
-        windowed = 1 if self.render_mode == "human" else 0
-        self._sim_context = self._dll.sim_init(windowed)
-        if self._sim_context is None:
-            raise RuntimeError("sim_init failed - returned null context")
         self._load_track("track1")
-        self._vehicle = self._dll.sim_add_vehicle(self._sim_context)
+        if self._vehicle is not None:
+            self._dll.sim_remove_vehicle(self._sim_context, self._vehicle)
+        spawn_point = self.np_random.uniform(0.0,  self._dll.sim_get_track_length(self._sim_context))
+        self._vehicle = self._dll.sim_add_vehicle(self._sim_context, spawn_point)
         self._track_length = self._dll.sim_get_track_length(self._sim_context)
         self._last_track_position = 0.0
         obs = self._get_observation()

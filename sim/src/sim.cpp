@@ -43,7 +43,7 @@ struct SimContext {
 
     Track *track;
 
-    std::vector<Vehicle> vehicles;
+    std::vector<Vehicle*> vehicles;
 
     // GL resources
     unsigned int groundPlaneVao;
@@ -254,8 +254,8 @@ static void renderScene(SimContext* ctx) {
         ctx->track->draw(ctx->locModel, ctx->locColor);
     }
 
-    for (auto& vehicle : ctx->vehicles) {
-        vehicle.draw(ctx->locModel, ctx->locColor);
+    for (auto vehicle : ctx->vehicles) {
+        vehicle->draw(ctx->locModel, ctx->locColor);
     }
     
     // Draw waypoints
@@ -267,8 +267,8 @@ static void renderScene(SimContext* ctx) {
         
         const float size = 0.3f;
 
-        Vehicle &vehicle = ctx->vehicles[0];
-        glm::vec2 vehiclePos2D = glm::vec2(vehicle.body->position.x, vehicle.body->position.z);
+        Vehicle *vehicle = ctx->vehicles[0];
+        glm::vec2 vehiclePos2D = glm::vec2(vehicle->body->position.x, vehicle->body->position.z);
         const float currentT = ctx->track->getClosestT(vehiclePos2D);
 
         for (const auto& waypoint : ctx->track->getWaypoints(currentT, 20, 0.1f)) {
@@ -410,8 +410,8 @@ RACEGYM_API void sim_step(void* sim_context) {
     {
         const float substepDelta = 1.0f / 600.0f; // 10 substeps for 60Hz
         ctx->physicsWorld.stepSimulation(substepDelta); // Fixed timestep for now
-        for (auto& vehicle : ctx->vehicles) {
-            vehicle.step(substepDelta);
+        for (auto vehicle : ctx->vehicles) {
+            vehicle->step(substepDelta);
         }
     }
 
@@ -468,10 +468,6 @@ RACEGYM_API void sim_load_track(void* sim_context, const char* path) {
     
     SimContext* ctx = static_cast<SimContext*>(sim_context);
     
-    // Here we would load the track data from the specified file path
-    // For now, we will just print the path to indicate this function was called
-    std::cout << "Loading track from: " << path << std::endl;
-
     if(ctx->track) {
         delete ctx->track;
     }
@@ -479,7 +475,7 @@ RACEGYM_API void sim_load_track(void* sim_context, const char* path) {
     ctx->track = new Track(path);
 }
 
-RACEGYM_API void* sim_add_vehicle(void* sim_context) {
+RACEGYM_API void* sim_add_vehicle(void* sim_context, float spawnT) {
     if (!sim_context) {
         return nullptr;
     }
@@ -491,12 +487,27 @@ RACEGYM_API void* sim_add_vehicle(void* sim_context) {
         return nullptr;
     }
 
-    glm::vec2 startPos = ctx->track->getPosition(0);
-    glm::vec2 startTangent = ctx->track->getTangent(0);
+    glm::vec2 startPos = ctx->track->getPosition(spawnT);
+    glm::vec2 startTangent = ctx->track->getTangent(spawnT);
     float startAngle = atan2(startTangent.x, startTangent.y);    
 
-    ctx->vehicles.emplace_back(ctx->physicsWorld, glm::vec3(startPos.x, 0.75f, startPos.y), glm::vec3(0.0f, startAngle, 0.0f));
-    return &ctx->vehicles.back();
+    Vehicle *vehicle = new Vehicle(ctx->physicsWorld, glm::vec3(startPos.x, 0.75f, startPos.y), glm::vec3(0.0f, startAngle, 0.0f));
+    ctx->vehicles.push_back(vehicle);
+    return vehicle;
+}
+
+RACEGYM_API void sim_remove_vehicle(void* sim_context, void* vehicle_ptr) {
+    if (!sim_context || !vehicle_ptr) {
+        return;
+    }
+
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    Vehicle* vehicle = static_cast<Vehicle*>(vehicle_ptr);
+
+    auto it = std::find(ctx->vehicles.begin(), ctx->vehicles.end(), vehicle);
+    if (it != ctx->vehicles.end()) {
+        ctx->vehicles.erase(it);
+    }
 }
 
 RACEGYM_API void sim_set_vehicle_control(void* vehicle_ptr, float steer, float throttle, float brake) {
