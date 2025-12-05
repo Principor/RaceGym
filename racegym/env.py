@@ -28,7 +28,8 @@ class RaceGymEnv(gym.Env):
     def __init__(self, render_mode: str | None = None):
         assert render_mode in ("human", None), "render_mode must be 'human' or None"
         self.render_mode = render_mode
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
+        # 40 waypoints (local x,z) => 80 values, plus longitudinal vel, lateral vel, yaw rate => 83
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(83,), dtype=np.float32)
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
 
         self._dll: ctypes.CDLL | None = None
@@ -65,6 +66,8 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_get_track_length.restype = ctypes.c_int
         self._dll.sim_is_vehicle_off_track.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         self._dll.sim_is_vehicle_off_track.restype = ctypes.c_int
+        self._dll.sim_get_observation.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_float), ctypes.c_int]
+        self._dll.sim_get_observation.restype = ctypes.c_int
 
     def _load_track(self, name: str):
         if self._dll is None or self._sim_context is None:
@@ -91,7 +94,7 @@ class RaceGymEnv(gym.Env):
         self._vehicle = self._dll.sim_add_vehicle(self._sim_context)
         self._track_length = self._dll.sim_get_track_length(self._sim_context)
         self._last_track_position = 0.0
-        obs = np.zeros((1,), dtype=np.float32)
+        obs = self._get_observation()
         info = {}
         return obs, info
 
@@ -121,10 +124,17 @@ class RaceGymEnv(gym.Env):
         is_off_track = self._dll.sim_is_vehicle_off_track(self._sim_context, self._vehicle)
         terminated = bool(is_off_track)
         
-        obs = np.zeros((1,), dtype=np.float32)
+        obs = self._get_observation()
         truncated = False
         info = {'track_position': current_track_position, 'off_track': terminated}
         return obs, reward, terminated, truncated, info
+
+    def _get_observation(self) -> np.ndarray:
+        buf_len = 83
+        buf_type = ctypes.c_float * buf_len
+        buf = buf_type()
+        count = self._dll.sim_get_observation(self._sim_context, self._vehicle, buf, buf_len)
+        return np.frombuffer(buf, dtype=np.float32, count=count)
 
     def render(self):
         # Window is handled by the sim itself in 'human' mode.

@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -548,6 +549,49 @@ RACEGYM_API int sim_is_vehicle_off_track(void* sim_context, void* vehicle_ptr) {
     Vehicle* vehicle = static_cast<Vehicle*>(vehicle_ptr);
 
     return vehicle->isOffTrack(ctx->track) ? 1 : 0;
+}
+
+RACEGYM_API int sim_get_observation(void* sim_context, void* vehicle_ptr, float* out_buffer, int max_floats) {
+    if (!sim_context || !vehicle_ptr || !out_buffer || max_floats <= 0) {
+        return 0;
+    }
+
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    Vehicle* vehicle = static_cast<Vehicle*>(vehicle_ptr);
+    if (!ctx->track) {
+        return 0;
+    }
+
+    // Current track parameter
+    glm::vec3 vehiclePos = vehicle->body->position;
+    float currentT = ctx->track->getClosestT(glm::vec2(vehiclePos.x, vehiclePos.z));
+
+    // Generate waypoints (20 pairs => 40 points)
+    const int numWaypoints = 20;
+    const float waypointSpacing = 0.1f;
+    const float trackWidth = 12.0f;
+    std::vector<glm::vec3> waypoints = ctx->track->getWaypoints(currentT, numWaypoints, waypointSpacing);
+
+    // Vehicle frame
+    glm::vec3 forward = glm::normalize(vehicle->body->orientation * glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::vec3 right   = glm::normalize(vehicle->body->orientation * glm::vec3(1.0f, 0.0f, 0.0f));
+
+    int idx = 0;
+    for (const auto& wp : waypoints) {
+        if (idx + 2 > max_floats) break;
+        glm::vec3 rel = wp - vehiclePos;
+        out_buffer[idx++] = glm::dot(rel, right);    // local x (lateral)
+        out_buffer[idx++] = glm::dot(rel, forward);  // local z (longitudinal)
+    }
+
+    if (idx + 3 <= max_floats) {
+        glm::vec3 vel = vehicle->body->velocity;
+        out_buffer[idx++] = glm::dot(vel, forward); // longitudinal velocity
+        out_buffer[idx++] = glm::dot(vel, right);   // lateral velocity
+        out_buffer[idx++] = vehicle->body->angularVelocity.y; // yaw rate
+    }
+
+    return idx;
 }
 
 } // extern "C"

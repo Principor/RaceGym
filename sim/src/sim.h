@@ -86,6 +86,19 @@ RACEGYM_API int sim_get_track_length(void* sim_context);
  */
 RACEGYM_API int sim_is_vehicle_off_track(void* sim_context, void* vehicle_ptr);
 
+/**
+ * Get observation vector for the specified vehicle.
+ * Observation layout: for each of 40 waypoints (20 pairs left/right) -> (local_x, local_z) relative to vehicle frame,
+ * followed by longitudinal velocity, lateral velocity, and yaw rate. All values are in vehicle-local coordinates.
+ *
+ * @param sim_context Pointer to simulation context
+ * @param vehicle_ptr Pointer to the vehicle
+ * @param out_buffer Caller-allocated float buffer
+ * @param max_floats Capacity of the buffer
+ * @return Number of floats written
+ */
+RACEGYM_API int sim_get_observation(void* sim_context, void* vehicle_ptr, float* out_buffer, int max_floats);
+
 #ifdef __cplusplus
 }
 #endif
