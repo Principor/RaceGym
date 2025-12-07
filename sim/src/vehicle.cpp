@@ -207,10 +207,21 @@ void Vehicle::step(float deltaTime)
         body->applyForceAtPoint(tireForce, contactPoint);
         
         // Update wheel angular velocity
-        // Torque on wheel = driveTorque - brakeTorque - longitudinalForce * wheelRadius
-        float wheelTorque = wheels[i].driveTorque - wheels[i].brakeTorque - longitudinalForce * wheels[i].wheelRadius;
+        // Torque on wheel = driveTorque - longitudinalForce * wheelRadius
+        float wheelTorque = wheels[i].driveTorque - longitudinalForce * wheels[i].wheelRadius;
         float angularAcceleration = wheelTorque / wheels[i].inertia;
         wheels[i].angularVelocity += angularAcceleration * deltaTime;
+
+        // Apply braking
+        float brakeAngularDecel = wheels[i].brakeTorque / wheels[i].inertia;
+        if(std::abs(wheels[i].angularVelocity) > brakeAngularDecel * deltaTime)
+        {
+            wheels[i].angularVelocity -= glm::sign(wheels[i].angularVelocity) * brakeAngularDecel * deltaTime;
+        }
+        else
+        {
+            wheels[i].angularVelocity = 0.0f;
+        }
     }
 
     body->applyForce(-body->velocity * glm::length(body->velocity) * 0.3f); // Simple drag
