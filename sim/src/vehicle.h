@@ -57,9 +57,10 @@ struct Wheel
 class Vehicle
 {
 public:
+    PhysicsWorld &world;
     PhysicsBody *body;
 
-    Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation);
+    Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation, bool enableGraphics);
     ~Vehicle();
 
     void step(float deltaTime);
@@ -71,6 +72,7 @@ public:
     bool isOffTrack(class Track* track) const;
 
 private:
+    bool graphicsEnabled;
     // Rendering data
     int numIndices;
     unsigned int vao, vbo, ebo;

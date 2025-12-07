@@ -11,8 +11,8 @@
 
 #define TRACK_WIDTH 12.0f
 
-Track::Track(const char *path)
-	: vao(0), vbo(0), ebo(0)
+Track::Track(const char *path, bool enableGraphics)
+	: graphicsEnabled(enableGraphics), vao(0), vbo(0), ebo(0)
 {
 	if (loadPointsFromFile(path))
 	{
@@ -22,6 +22,8 @@ Track::Track(const char *path)
 
 Track::~Track()
 {
+	if (!graphicsEnabled)
+		return;
 	if (vao)
 	{
 		glDeleteVertexArrays(1, &vao);
@@ -41,7 +43,7 @@ Track::~Track()
 
 void Track::draw(int locModel, int locColor)
 {
-	if (vao == 0)
+	if (!graphicsEnabled || vao == 0)
 		return;
 
 	glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
@@ -218,6 +220,9 @@ bool Track::loadPointsFromFile(const char *path)
 
 void Track::generateGeometry()
 {
+	if (!graphicsEnabled)
+		return;
+
 	if (points.empty())
 		return;
 

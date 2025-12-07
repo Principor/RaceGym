@@ -92,9 +92,12 @@ public:
     void stepSimulation(float deltaTime);
 
     PhysicsBody* addBody(CollisionShape const *shape, float mass=0.0f, const glm::vec3 &position=glm::vec3(0.0f), const glm::quat &orientation=glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    void removeBody(PhysicsBody* body);
+
+    void clear();
 
 private:
-    std::vector<PhysicsBody> bodies;
+    std::vector<PhysicsBody*> bodies;
 };
 
 #endif // PHYSICS_H

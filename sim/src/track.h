@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 class Track {
+    bool graphicsEnabled;
     std::vector<glm::vec2> points;
     int numSegments;
 
@@ -16,7 +17,7 @@ class Track {
     void generateGeometry();
 
 public:
-    Track(const char* path);
+    Track(const char* path, bool enableGraphics);
     ~Track();
 
     void draw(int locModel, int locColor);

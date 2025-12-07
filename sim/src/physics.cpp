@@ -47,14 +47,27 @@ glm::mat4 PhysicsBody::getModelMatrix() const
 
 void PhysicsWorld::stepSimulation(float deltaTime)
 {
-    for(auto &body : bodies)
+    for(auto body : bodies)
     {
-        body.applyForce(gravity * body.mass);
-        body.step(deltaTime);
+        body->applyForce(gravity * body->mass);
+        body->step(deltaTime);
     }
 }
 
 PhysicsBody* PhysicsWorld::addBody(CollisionShape const *shape, float mass, const glm::vec3 &position, const glm::quat &orientation)
 {
-    return &bodies.emplace_back(shape, mass, position, orientation);
+    PhysicsBody *body = new PhysicsBody(shape, mass, position, orientation);
+    bodies.push_back(body);
+    return body;
+    
+}
+
+void PhysicsWorld::removeBody(PhysicsBody* body)
+{
+    auto it = std::find(bodies.begin(), bodies.end(), body);
+    if(it != bodies.end())
+    {
+        bodies.erase(it);
+        delete body;
+    }
 }

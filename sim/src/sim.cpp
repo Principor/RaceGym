@@ -470,9 +470,13 @@ RACEGYM_API void sim_load_track(void* sim_context, const char* path) {
     
     if(ctx->track) {
         delete ctx->track;
+        for(auto vehicle : ctx->vehicles) {
+            delete vehicle;
+        }
+        ctx->vehicles.clear(); // Clear physics bodies to prevent dangling pointers
     }
 
-    ctx->track = new Track(path);
+    ctx->track = new Track(path, ctx->windowed);
 }
 
 RACEGYM_API void* sim_add_vehicle(void* sim_context, float spawnT) {
@@ -491,7 +495,7 @@ RACEGYM_API void* sim_add_vehicle(void* sim_context, float spawnT) {
     glm::vec2 startTangent = ctx->track->getTangent(spawnT);
     float startAngle = atan2(startTangent.x, startTangent.y);    
 
-    Vehicle *vehicle = new Vehicle(ctx->physicsWorld, glm::vec3(startPos.x, 0.75f, startPos.y), glm::vec3(0.0f, startAngle, 0.0f));
+        Vehicle *vehicle = new Vehicle(ctx->physicsWorld, glm::vec3(startPos.x, 0.75f, startPos.y), glm::vec3(0.0f, startAngle, 0.0f), ctx->windowed);
     ctx->vehicles.push_back(vehicle);
     return vehicle;
 }
@@ -507,6 +511,7 @@ RACEGYM_API void sim_remove_vehicle(void* sim_context, void* vehicle_ptr) {
     auto it = std::find(ctx->vehicles.begin(), ctx->vehicles.end(), vehicle);
     if (it != ctx->vehicles.end()) {
         ctx->vehicles.erase(it);
+        delete vehicle;
     }
 }
 

@@ -8,7 +8,8 @@
 #include <iostream>
 #include <algorithm>
 
-Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation)
+Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation, bool enableGraphics)
+    : world(world), graphicsEnabled(enableGraphics)
 {
     CollisionShape* boxShape = new BoxShape(VEHICLE_DIMENSIONS / 2.0f); // Example dimensions
     // Convert Euler angles to quaternion: rotation is assumed to be (pitch, yaw, roll)
@@ -40,59 +41,69 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
     throttle = 0.0f;
     brake = 0.0f;
 
-    // Create a simple box for rendering
-    float w = VEHICLE_DIMENSIONS.x;
-    float h = VEHICLE_DIMENSIONS.y;
-    float l = VEHICLE_DIMENSIONS.z;
-    float vertices[] = {
-        -w/2, -h/2, -l/2,
-         w/2, -h/2, -l/2,
-         w/2,  h/2, -l/2,
-        -w/2,  h/2, -l/2,
-        -w/2, -h/2,  l/2,
-         w/2, -h/2,  l/2,
-         w/2,  h/2,  l/2,
-        -w/2,  h/2,  l/2,
-    };
-    unsigned int indices[] = {
-        0, 1, 2, 2, 3, 0,
-        4, 5, 6, 6, 7, 4,
-        0, 1, 5, 5, 4, 0,
-        2, 3, 7, 7, 6, 2,
-        0, 3, 7, 7, 4, 0,
-        1, 2, 6, 6, 5, 1,
-    };
+    // Create a simple box for rendering (only if graphics are enabled)
+    vao = vbo = ebo = 0;
     numIndices = 36;
-    glGenVertexArrays(1, &vao);
-    glGenBuffers(1, &vbo);
-    glGenBuffers(1, &ebo);
-    glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glBindVertexArray(0);
+    if (graphicsEnabled)
+    {
+        float w = VEHICLE_DIMENSIONS.x;
+        float h = VEHICLE_DIMENSIONS.y;
+        float l = VEHICLE_DIMENSIONS.z;
+        float vertices[] = {
+            -w/2, -h/2, -l/2,
+             w/2, -h/2, -l/2,
+             w/2,  h/2, -l/2,
+            -w/2,  h/2, -l/2,
+            -w/2, -h/2,  l/2,
+             w/2, -h/2,  l/2,
+             w/2,  h/2,  l/2,
+            -w/2,  h/2,  l/2,
+        };
+        unsigned int indices[] = {
+            0, 1, 2, 2, 3, 0,
+            4, 5, 6, 6, 7, 4,
+            0, 1, 5, 5, 4, 0,
+            2, 3, 7, 7, 6, 2,
+            0, 3, 7, 7, 4, 0,
+            1, 2, 6, 6, 5, 1,
+        };
+        glGenVertexArrays(1, &vao);
+        glGenBuffers(1, &vbo);
+        glGenBuffers(1, &ebo);
+        glBindVertexArray(vao);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glBindVertexArray(0);
+    }
 }
 
 Vehicle::~Vehicle()
 {
-    if (vao)
+    if (graphicsEnabled)
     {
-        glDeleteVertexArrays(1, &vao);
-        vao = 0;
+
+        if (vao)
+        {
+            glDeleteVertexArrays(1, &vao);
+            vao = 0;
+        }
+        if (vbo)
+        {
+            glDeleteBuffers(1, &vbo);
+            vbo = 0;
+        }
+        if (ebo)
+        {
+            glDeleteBuffers(1, &ebo);
+            ebo = 0;
+        }
     }
-    if (vbo)
-    {
-        glDeleteBuffers(1, &vbo);
-        vbo = 0;
-    }
-    if (ebo)
-    {
-        glDeleteBuffers(1, &ebo);
-        ebo = 0;
-    }
+
+    world.removeBody(body);
 }
 
 void Vehicle::step(float deltaTime)
@@ -207,6 +218,8 @@ void Vehicle::step(float deltaTime)
 
 void Vehicle::draw(int locModel, int locColor)
 {
+    if (!graphicsEnabled || vao == 0)
+        return;
     glm::mat4 model = body->getModelMatrix();
 
     glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(model));
