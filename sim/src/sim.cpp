@@ -353,6 +353,23 @@ static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     cam.direction.z = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
 }
 
+static void performRenderStep(SimContext* ctx, double& lastCameraTime) {
+    if (glfwWindowShouldClose(ctx->window)) {
+        ctx->running = false;
+        return;
+    }
+    
+    glfwPollEvents();
+    
+    double now = glfwGetTime();
+    float deltaTime = static_cast<float>(now - lastCameraTime);
+    lastCameraTime = now;
+    processCameraInput(ctx, deltaTime);
+    
+    renderScene(ctx);
+    glfwSwapBuffers(ctx->window);
+}
+
 } // namespace
 
 extern "C" {
@@ -406,34 +423,54 @@ RACEGYM_API void sim_step(void* sim_context) {
     
     SimContext* ctx = static_cast<SimContext*>(sim_context);
 
-    for(int i = 0; i < 10; i++)
-    {
-        const float substepDelta = 1.0f / 600.0f; // 10 substeps for 60Hz
-        ctx->physicsWorld.stepSimulation(substepDelta); // Fixed timestep for now
-        for (auto vehicle : ctx->vehicles) {
-            vehicle->step(substepDelta);
+    const float substepDelta = 1.0f / 100.0f;  // 0.01 seconds per physics step
+    const int maxSubsteps = 10;
+    
+    auto startTime = std::chrono::high_resolution_clock::now();
+    float simulatedTime = 0.0f;
+    int substepsCompleted = 0;
+    bool hasRendered = false;
+    
+    // Camera timing for input processing
+    static double lastCameraTime = 0.0;
+    if (ctx->windowed && ctx->window) {
+        if (lastCameraTime == 0.0) {
+            lastCameraTime = glfwGetTime();
         }
-    }
-
-    if (ctx->windowed && ctx->window && ctx->running) {
-        if (glfwWindowShouldClose(ctx->window)) {
-            ctx->running = false;
-            return;
-        }
-        
-        glfwPollEvents();
-        // Camera movement: estimate deltaTime for smooth movement
-        static double lastTime = glfwGetTime();
-        double now = glfwGetTime();
-        float deltaTime = static_cast<float>(now - lastTime);
-        lastTime = now;
-        processCameraInput(ctx, deltaTime);
-        // Render the scene
-        renderScene(ctx);
-        glfwSwapBuffers(ctx->window);
     }
     
-    // Physics simulation and other updates would go here
+    while (substepsCompleted < maxSubsteps) {
+        // Check if we should render or simulate
+        bool shouldRender = false;
+        if (ctx->windowed && ctx->window && ctx->running) {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<float> elapsed = currentTime - startTime;
+            float elapsedSeconds = elapsed.count();
+            
+            // Render if we're ahead of real-time or if this is the last physics step
+            shouldRender = (simulatedTime >= elapsedSeconds) || (substepsCompleted == maxSubsteps);
+        }
+        
+        if (shouldRender) {
+            // Perform render step
+            performRenderStep(ctx, lastCameraTime);
+            if (!ctx->running) return;
+            hasRendered = true;
+        } else {
+            // Perform physics step
+            ctx->physicsWorld.stepSimulation(substepDelta);
+            for (auto vehicle : ctx->vehicles) {
+                vehicle->step(substepDelta);
+            }
+            substepsCompleted++;
+            simulatedTime += substepDelta;
+        }
+    }
+    
+    // Ensure at least one render if windowed and we somehow didn't render yet
+    if (ctx->windowed && ctx->window && ctx->running && !hasRendered) {
+        performRenderStep(ctx, lastCameraTime);
+    }
 }
 
 RACEGYM_API void sim_shutdown(void* sim_context) {

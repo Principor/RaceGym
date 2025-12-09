@@ -8,16 +8,12 @@ def demo(render_mode):
     obs, info = env.reset()
     print("Reset complete; sleeping briefly...")
     for step in range(300):
-        frame_start = time.time()
         action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
         print(f"Step {step}: reward={reward}, info={info}")
         if render_mode is not None:
             env.render()
-        elapsed = time.time() - frame_start
-        sleep_time = max(0, (1 / 60) - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+
         if terminated or truncated:
             print(f"Episode ended after {step + 1} steps.")
             break
