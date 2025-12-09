@@ -13,6 +13,7 @@ const float WHEEL_RADIUS = 0.35f; // in meters
 const float SUSPENSION_TRAVEL = 0.5f; // in meters
 const float SUSPENSION_STIFFNESS = 70000.0f; // N/m
 const float SUSPENSION_DAMPING = 4500.0f; // Ns/m
+const float ANTI_ROLL_BAR_STIFFNESS = 5000.0f; // Nm/rad
 
 // Pacejka Magic Formula coefficients (simplified)
 struct PacejkaCoefficients
@@ -42,7 +43,8 @@ struct Wheel
     float brakeTorque;
     glm::vec3 lastContactPoint; // Last point where wheel touched ground
     bool hasContact; // Whether wheel is currently in contact
-    
+    float antiRollForce; // Force from anti-roll bar
+
     // Calculate Pacejka Magic Formula
     float calculatePacejka(float slip, const PacejkaCoefficients &coeff, float normalForce) const
     {

@@ -132,6 +132,23 @@ void Vehicle::step(float deltaTime)
     wheels[2].brakeTorque = brakeTorque;
     wheels[3].brakeTorque = brakeTorque;
 
+    for(int i = 0; i < 2; i++)
+    {
+        for(int j = 0; j < 2; j++)
+        {
+            int leftWheelIndex = i * 2 + 1;
+            int rightWheelIndex = i * 2 + 0;
+
+            float leftCompression = wheels[leftWheelIndex].compression;
+            float rightCompression = wheels[rightWheelIndex].compression;
+
+            float antiRollForce = (leftCompression - rightCompression) * ANTI_ROLL_BAR_STIFFNESS;
+
+            wheels[leftWheelIndex].antiRollForce = -antiRollForce;
+            wheels[rightWheelIndex].antiRollForce = antiRollForce;
+        }
+    }
+
     // Simple spring-damper parameters
     float restLength = SUSPENSION_TRAVEL + WHEEL_RADIUS; // ray length from mount
     float k = SUSPENSION_STIFFNESS; // N/m spring stiffness
@@ -165,7 +182,7 @@ void Vehicle::step(float deltaTime)
         // Compression is how much shorter than rest the ray is
         float compression = restLength - t;
         float compressionVelocity = (compression - wheels[i].compression) / deltaTime;
-        float forceMag = k * compression + SUSPENSION_DAMPING * compressionVelocity;
+        float forceMag = k * compression + SUSPENSION_DAMPING * compressionVelocity + wheels[i].antiRollForce;
 
         wheels[i].compression = compression;
 
