@@ -107,6 +107,23 @@ RACEGYM_API int sim_is_vehicle_off_track(void* sim_context, void* vehicle_ptr);
  */
 RACEGYM_API int sim_get_observation(void* sim_context, void* vehicle_ptr, float* out_buffer, int max_floats);
 
+/**
+ * Get the vehicle's velocity vector in world coordinates.
+ * 
+ * @param vehicle_ptr Pointer to the vehicle
+ * @param out_vel_xyz Output array [x, y, z] for velocity components
+ */
+RACEGYM_API void sim_get_vehicle_velocity(void* vehicle_ptr, float* out_vel_xyz);
+
+/**
+ * Get the track normal vector at a given track parameter.
+ * 
+ * @param sim_context Pointer to simulation context
+ * @param t Track parameter position
+ * @param out_normal_xy Output array [x, y] for normal vector components
+ */
+RACEGYM_API void sim_get_track_normal(void* sim_context, float t, float* out_normal_xy);
+
 #ifdef __cplusplus
 }
 #endif

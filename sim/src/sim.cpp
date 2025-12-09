@@ -610,4 +610,33 @@ RACEGYM_API int sim_get_observation(void* sim_context, void* vehicle_ptr, float*
     return idx;
 }
 
+RACEGYM_API void sim_get_vehicle_velocity(void* vehicle_ptr, float* out_vel_xyz) {
+    if (!vehicle_ptr || !out_vel_xyz) {
+        return;
+    }
+
+    Vehicle* vehicle = static_cast<Vehicle*>(vehicle_ptr);
+    glm::vec3 vel = vehicle->body->velocity;
+    out_vel_xyz[0] = vel.x;
+    out_vel_xyz[1] = vel.y;
+    out_vel_xyz[2] = vel.z;
+}
+
+RACEGYM_API void sim_get_track_normal(void* sim_context, float t, float* out_normal_xy) {
+    if (!sim_context || !out_normal_xy) {
+        return;
+    }
+
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    if (!ctx->track) {
+        out_normal_xy[0] = 0.0f;
+        out_normal_xy[1] = 0.0f;
+        return;
+    }
+
+    glm::vec2 normal = ctx->track->getNormal(t);
+    out_normal_xy[0] = normal.x;
+    out_normal_xy[1] = normal.y;
+}
+
 } // extern "C"

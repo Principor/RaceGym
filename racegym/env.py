@@ -81,6 +81,10 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_is_vehicle_off_track.restype = ctypes.c_int
         self._dll.sim_get_observation.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_float), ctypes.c_int]
         self._dll.sim_get_observation.restype = ctypes.c_int
+        self._dll.sim_get_vehicle_velocity.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
+        self._dll.sim_get_vehicle_velocity.restype = None
+        self._dll.sim_get_track_normal.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.POINTER(ctypes.c_float)]
+        self._dll.sim_get_track_normal.restype = None
 
     def _load_track(self, name: str):
         if self._dll is None or self._sim_context is None:
@@ -127,9 +131,34 @@ class RaceGymEnv(gym.Env):
         self._last_track_position = current_track_position
         
         # Check if vehicle is off track
+        terminated = False
         is_off_track = self._dll.sim_is_vehicle_off_track(self._sim_context, self._vehicle)
-        terminated = bool(is_off_track)
-        
+        if(is_off_track != 0):
+            terminated = True
+            
+            # Get velocity-projected penalty
+            # Get current track position along curve
+            current_track_position = self._dll.sim_get_vehicle_track_position(self._sim_context, self._vehicle)
+            
+            # Get vehicle velocity (3D vector) -> project to 2D (XZ plane)
+            vel_buf = (ctypes.c_float * 3)()
+            self._dll.sim_get_vehicle_velocity(self._vehicle, vel_buf)
+            vel_2d = np.array([vel_buf[0], vel_buf[2]], dtype=np.float32)
+            
+            # Get track normal at current position (2D)
+            normal_buf = (ctypes.c_float * 2)()
+            self._dll.sim_get_track_normal(self._sim_context, current_track_position, normal_buf)
+            track_normal = np.array([normal_buf[0], normal_buf[1]], dtype=np.float32)
+            
+            # Project velocity onto the track normal
+            # Positive component means moving away from track
+            normal_velocity = np.dot(vel_2d, track_normal)
+            
+            # Apply penalty proportional to the outward velocity component
+            # Max of 0 ensures we only penalize when moving away from track
+            penalty = abs(normal_velocity)
+            reward -= penalty
+
         obs = self._get_observation()
         truncated = False
         info = {'track_position': current_track_position, 'off_track': terminated}
