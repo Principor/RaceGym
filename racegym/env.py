@@ -103,7 +103,7 @@ class RaceGymEnv(gym.Env):
         spawn_point = self.np_random.uniform(0.0,  self._dll.sim_get_track_length(self._sim_context))
         self._vehicle = self._dll.sim_add_vehicle(self._sim_context, spawn_point)
         self._track_length = self._dll.sim_get_track_length(self._sim_context)
-        self._last_track_position = 0.0
+        self._last_track_position = spawn_point
         obs = self._get_observation()
         info = {}
         return obs, info
