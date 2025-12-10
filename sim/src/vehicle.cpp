@@ -118,15 +118,15 @@ void Vehicle::step(float deltaTime)
     wheels[3].steerAngle = 0.0f; // Rear-Left
 
     float engineAngularVelocity = (wheels[2].angularVelocity + wheels[3].angularVelocity) / 2; // Simple average
-    float enginePower = throttle * 110000.0f; // Max 110kW
-    float engineTorque = glm::min(enginePower / glm::max(engineAngularVelocity, 1.0f), 3000.0f); // Limit max torque to 3000Nm
+    float enginePower = throttle * 50000.0f; // Max 110kW
+    float engineTorque = glm::min(enginePower / glm::max(engineAngularVelocity, 1.0f), 2000.0f); // Limit max torque to 3000Nm
     float driveTorque = engineTorque * 0.5f; // Split torque to rear wheels
     wheels[0].driveTorque = 0.0f;
     wheels[1].driveTorque = 0.0f;
     wheels[2].driveTorque = driveTorque;
     wheels[3].driveTorque = driveTorque;
 
-    float brakeTorque = brake * 2000.0f; // Max 2000Nm per wheel
+    float brakeTorque = brake * 3000.0f; // Max 2000Nm per wheel
     wheels[0].brakeTorque = brakeTorque;
     wheels[1].brakeTorque = brakeTorque;
     wheels[2].brakeTorque = brakeTorque;
@@ -241,7 +241,7 @@ void Vehicle::step(float deltaTime)
         }
     }
 
-    body->applyForce(-body->velocity * glm::length(body->velocity) * 0.3f); // Simple drag
+    body->applyForce(-body->velocity * glm::length(body->velocity) * 0.4f); // Simple drag
 }
 
 void Vehicle::draw(int locModel, int locColor)
