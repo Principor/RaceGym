@@ -61,3 +61,7 @@ sim/build/vcpkg_installed/
 *.log
 *.tmp
 *.temp
+
+# Training checkpoints
+checkpoints/
+ppo_racegym_final.zip

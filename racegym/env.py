@@ -155,8 +155,7 @@ class RaceGymEnv(gym.Env):
             normal_velocity = np.dot(vel_2d, track_normal)
             
             # Apply penalty proportional to the outward velocity component
-            # Max of 0 ensures we only penalize when moving away from track
-            penalty = abs(normal_velocity)
+            penalty = abs(normal_velocity) * 0.3
             reward -= penalty
 
         obs = self._get_observation()
