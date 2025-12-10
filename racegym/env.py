@@ -23,11 +23,12 @@ def _find_sim_dll() -> Path | None:
 
 
 class RaceGymEnv(gym.Env):
-    metadata = {"render_modes": ["human", None], "render_fps": 60}
+    metadata = {"render_modes": ["human", None]}
 
-    def __init__(self, render_mode: str | None = None):
+    def __init__(self, render_mode: str | None = None, fixed_start: bool = False):
         assert render_mode in ("human", None), "render_mode must be 'human' or None"
         self.render_mode = render_mode
+        self.fixed_start = fixed_start
         # 40 waypoints (local x,z) => 80 values, plus longitudinal vel, lateral vel, yaw rate => 83
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(83,), dtype=np.float32)
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
@@ -37,6 +38,9 @@ class RaceGymEnv(gym.Env):
         self._vehicle: ctypes.c_void_p | None = None
         self._track_length: int = 0
         self._last_track_position: float = 0.0
+        self._total_distance: float = 0.0
+        self._lap_start_time: float = None
+        self._n_steps: int = 0
         
         self._load_dll()
         if self._sim_context is not None:
@@ -98,12 +102,18 @@ class RaceGymEnv(gym.Env):
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
         self._load_track("track1")
+        self._track_length = self._dll.sim_get_track_length(self._sim_context)
         if self._vehicle is not None:
             self._dll.sim_remove_vehicle(self._sim_context, self._vehicle)
-        spawn_point = self.np_random.uniform(0.0,  self._dll.sim_get_track_length(self._sim_context))
+        if self.fixed_start:
+            spawn_point = self._track_length - 2
+        else:
+            spawn_point = self.np_random.uniform(0.0,  self._dll.sim_get_track_length(self._sim_context))
         self._vehicle = self._dll.sim_add_vehicle(self._sim_context, spawn_point)
-        self._track_length = self._dll.sim_get_track_length(self._sim_context)
         self._last_track_position = spawn_point
+        self._total_distance = 0.0
+        self._lap_start_time = None
+        self._n_steps = 0
         obs = self._get_observation()
         info = {}
         return obs, info
@@ -127,7 +137,16 @@ class RaceGymEnv(gym.Env):
             # Wrapped forwards (e.g., from 9.9 to 0.1 on a 10-segment track)
             delta += self._track_length
         
+        lap_time = None
+        if current_track_position < self._track_length  / 2 and self._last_track_position > self._track_length / 2:
+            cross_time = (self._n_steps + ( (self._track_length - self._last_track_position) ) / delta) * (1.0 / 10.0)  # assuming 10 steps per second
+            if self._lap_start_time is not None:
+                lap_time = cross_time - self._lap_start_time
+            self._lap_start_time = cross_time
+        self._n_steps += 1
+        
         reward = delta
+        self._total_distance += delta
         self._last_track_position = current_track_position
         
         # Check if vehicle is off track
@@ -160,7 +179,11 @@ class RaceGymEnv(gym.Env):
 
         obs = self._get_observation()
         truncated = False
-        info = {'track_position': current_track_position, 'off_track': terminated}
+        info = { 'track_position': current_track_position }
+        if lap_time is not None:
+            info['lap_time'] = lap_time
+        if terminated:
+            info['total_distance'] = self._total_distance
         return obs, reward, terminated, truncated, info
 
     def _get_observation(self) -> np.ndarray:

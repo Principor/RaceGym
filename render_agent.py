@@ -14,7 +14,7 @@ def render_trained_agent(model_path="ppo_racegym_final.zip", num_episodes=5):
         num_episodes: Number of episodes to render
     """
     # Create environment with human rendering
-    env = RaceGymEnv(render_mode="human")
+    env = RaceGymEnv(render_mode="human", fixed_start=True)
     
     # Load the trained model
     print(f"Loading model from {model_path}...")
@@ -33,12 +33,18 @@ def render_trained_agent(model_path="ppo_racegym_final.zip", num_episodes=5):
         
         while not (done or truncated):
             # Get action from the trained model
-            action, _states = model.predict(obs, deterministic=True)
+            action, _states = model.predict(obs, deterministic=False)
             
             # Take action in environment
             obs, reward, done, truncated, info = env.step(action)
             episode_reward += reward
             step_count += 1
+                
+            if "lap_time" in info:
+                print(f"Previous lap time: {info['lap_time']:.2f} seconds")
+            if "total_distance" in info:
+                print(f"Total distance traveled: {info['total_distance']:.2f} segments")
+            
         
         print(f"Episode {episode + 1} finished:")
         print(f"  Steps: {step_count}")
