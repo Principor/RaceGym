@@ -25,10 +25,11 @@ def _find_sim_dll() -> Path | None:
 class RaceGymEnv(gym.Env):
     metadata = {"render_modes": ["human", None]}
 
-    def __init__(self, render_mode: str | None = None, fixed_start: bool = False):
+    def __init__(self, render_mode: str | None = None, fixed_start: bool = False, max_episode_steps: int = 5000):
         assert render_mode in ("human", None), "render_mode must be 'human' or None"
         self.render_mode = render_mode
         self.fixed_start = fixed_start
+        self.max_episode_steps = max_episode_steps
         # 40 waypoints (local x,z) => 80 values, plus longitudinal vel, lateral vel, yaw rate => 83
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(83,), dtype=np.float32)
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
@@ -89,6 +90,8 @@ class RaceGymEnv(gym.Env):
         self._dll.sim_get_vehicle_velocity.restype = None
         self._dll.sim_get_track_normal.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.POINTER(ctypes.c_float)]
         self._dll.sim_get_track_normal.restype = None
+        self._dll.sim_is_vehicle_crashed.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self._dll.sim_is_vehicle_crashed.restype = ctypes.c_int
 
     def _load_track(self, name: str):
         if self._dll is None or self._sim_context is None:
@@ -176,9 +179,21 @@ class RaceGymEnv(gym.Env):
             # Apply penalty proportional to the outward velocity component
             penalty = abs(normal_velocity) * 0.3
             reward -= penalty
+        
+        # Check if vehicle has crashed (upside down, underground, airborne, or far from track)
+        is_crashed = self._dll.sim_is_vehicle_crashed(self._sim_context, self._vehicle)
+        if is_crashed != 0:
+            terminated = True
+            # Apply a larger penalty for crashes
+            reward -= 10.0
 
         obs = self._get_observation()
+        
+        # Check for truncation due to max episode steps
         truncated = False
+        if self._n_steps >= self.max_episode_steps:
+            truncated = True
+        
         info = { 'track_position': current_track_position }
         if lap_time is not None:
             info['lap_time'] = lap_time

@@ -124,6 +124,15 @@ RACEGYM_API void sim_get_vehicle_velocity(void* vehicle_ptr, float* out_vel_xyz)
  */
 RACEGYM_API void sim_get_track_normal(void* sim_context, float t, float* out_normal_xy);
 
+/**
+ * Check if the vehicle has crashed (upside down, underground, or too high).
+ * 
+ * @param sim_context Pointer to simulation context
+ * @param vehicle_ptr Pointer to the vehicle
+ * @return 1 if vehicle has crashed, 0 otherwise
+ */
+RACEGYM_API int sim_is_vehicle_crashed(void* sim_context, void* vehicle_ptr);
+
 #ifdef __cplusplus
 }
 #endif

@@ -676,4 +676,46 @@ RACEGYM_API void sim_get_track_normal(void* sim_context, float t, float* out_nor
     out_normal_xy[1] = normal.y;
 }
 
+RACEGYM_API int sim_is_vehicle_crashed(void* sim_context, void* vehicle_ptr) {
+    if (!sim_context || !vehicle_ptr) {
+        return 0;
+    }
+
+    SimContext* ctx = static_cast<SimContext*>(sim_context);
+    Vehicle* vehicle = static_cast<Vehicle*>(vehicle_ptr);
+    
+    glm::vec3 pos = vehicle->body->position;
+    glm::quat orientation = vehicle->body->orientation;
+    
+    // Check if underground (y < -2.0)
+    if (pos.y < -2.0f) {
+        return 1;
+    }
+    
+    // Check if too high in the air (y > 20.0)
+    if (pos.y > 20.0f) {
+        return 1;
+    }
+    
+    // Check if upside down - get the up vector in world space
+    glm::vec3 up = orientation * glm::vec3(0.0f, 1.0f, 0.0f);
+    // If the dot product with world up is negative, vehicle is upside down
+    if (up.y < -0.1f) {
+        return 1;
+    }
+    
+    // Check if too far from track (horizontal distance > 100 units)
+    if (ctx->track) {
+        glm::vec2 vehiclePos2D = glm::vec2(pos.x, pos.z);
+        float t = ctx->track->getClosestT(vehiclePos2D);
+        glm::vec2 trackPos = ctx->track->getPosition(t);
+        float distanceFromTrack = glm::distance(vehiclePos2D, trackPos);
+        if (distanceFromTrack > 100.0f) {
+            return 1;
+        }
+    }
+    
+    return 0;
+}
+
 } // extern "C"
