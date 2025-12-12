@@ -10,10 +10,13 @@ const glm::vec3 VEHICLE_DIMENSIONS(2.0f, 1.0f, 4.0f); // Width, Height, Length i
 const float VEHICLE_MASS = 1200.0f; // in kg
 
 const float WHEEL_RADIUS = 0.35f; // in meters
-const float SUSPENSION_TRAVEL = 0.5f; // in meters
+const float SUSPENSION_TRAVEL = 0.15f; // in meters
 const float SUSPENSION_STIFFNESS = 70000.0f; // N/m
 const float SUSPENSION_DAMPING = 4500.0f; // Ns/m
 const float ANTI_ROLL_BAR_STIFFNESS = 5000.0f; // Nm/rad
+
+const int WHEEL_RENDER_RESOLUTION = 12; // Number of points around the wheel
+const float WHEEL_THICKNESS = 0.25f; // Thickness of the wheel in meters
 
 // Pacejka Magic Formula coefficients (simplified)
 struct PacejkaCoefficients
@@ -38,12 +41,13 @@ struct Wheel
     float inertia;
     float compression; // Current compression of the suspension
     float angularVelocity; // Current wheel angular velocity
+    float rollAngle; // Current roll angle for rendering
     float steerAngle;
     float driveTorque;
     float brakeTorque;
     glm::vec3 lastContactPoint; // Last point where wheel touched ground
     bool hasContact; // Whether wheel is currently in contact
-    float antiRollForce; // Force from anti-roll bar
+float antiRollForce; // Force from anti-roll bar
 
     // Calculate Pacejka Magic Formula
     float calculatePacejka(float slip, const PacejkaCoefficients &coeff, float normalForce) const
@@ -78,6 +82,9 @@ private:
     // Rendering data
     int numIndices;
     unsigned int vao, vbo, ebo;
+    // Wheel rendering data
+    int wheelNumIndices;
+    unsigned int wheelVao, wheelVbo, wheelEbo;
 
     std::array<Wheel, 4> wheels;
 

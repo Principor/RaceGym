@@ -33,6 +33,7 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
         wheels[i].inertia = 0.5f * 10.0f * WHEEL_RADIUS * WHEEL_RADIUS; // Assuming wheel mass of 10kg
         wheels[i].compression = 0.0f;
         wheels[i].angularVelocity = 0.0f;
+        wheels[i].rollAngle = 0.0f;
         wheels[i].lastContactPoint = glm::vec3(0.0f);
         wheels[i].hasContact = false;
     }
@@ -43,7 +44,9 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
 
     // Create a simple box for rendering (only if graphics are enabled)
     vao = vbo = ebo = 0;
+    wheelVao = wheelVbo = wheelEbo = 0;
     numIndices = 36;
+    wheelNumIndices = 0;
     if (graphicsEnabled)
     {
         float w = VEHICLE_DIMENSIONS.x;
@@ -78,6 +81,91 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
         glBindVertexArray(0);
+
+        // Create wheel cylinder mesh
+        std::vector<float> wheelVertices;
+        std::vector<unsigned int> wheelIndices;
+        
+        float radius = WHEEL_RADIUS;
+        float thickness = WHEEL_THICKNESS;
+        
+        // Generate vertices for cylinder (two circles)
+        for (int i = 0; i < WHEEL_RENDER_RESOLUTION; ++i)
+        {
+            float angle = 2.0f * 3.14159265359f * i / WHEEL_RENDER_RESOLUTION;
+            float x = radius * glm::cos(angle);
+            float z = radius * glm::sin(angle);
+            
+            // Front circle
+            wheelVertices.push_back(x);
+            wheelVertices.push_back(-thickness / 2.0f);
+            wheelVertices.push_back(z);
+            
+            // Back circle
+            wheelVertices.push_back(x);
+            wheelVertices.push_back(thickness / 2.0f);
+            wheelVertices.push_back(z);
+        }
+        
+        // Generate indices for cylinder sides
+        for (int i = 0; i < WHEEL_RENDER_RESOLUTION; ++i)
+        {
+            int next = (i + 1) % WHEEL_RENDER_RESOLUTION;
+            int frontCurr = i * 2;
+            int backCurr = i * 2 + 1;
+            int frontNext = next * 2;
+            int backNext = next * 2 + 1;
+            
+            // Two triangles for side face
+            wheelIndices.push_back(frontCurr);
+            wheelIndices.push_back(frontNext);
+            wheelIndices.push_back(backCurr);
+            
+            wheelIndices.push_back(backCurr);
+            wheelIndices.push_back(frontNext);
+            wheelIndices.push_back(backNext);
+        }
+        
+        // Add center vertices for caps
+        int centerFront = wheelVertices.size() / 3;
+        wheelVertices.push_back(0.0f);
+        wheelVertices.push_back(-thickness / 2.0f);
+        wheelVertices.push_back(0.0f);
+        
+        int centerBack = wheelVertices.size() / 3;
+        wheelVertices.push_back(0.0f);
+        wheelVertices.push_back(thickness / 2.0f);
+        wheelVertices.push_back(0.0f);
+        
+        // Generate indices for caps
+        for (int i = 0; i < WHEEL_RENDER_RESOLUTION; ++i)
+        {
+            int next = (i + 1) % WHEEL_RENDER_RESOLUTION;
+            
+            // Front cap
+            wheelIndices.push_back(centerFront);
+            wheelIndices.push_back(i * 2);
+            wheelIndices.push_back(next * 2);
+            
+            // Back cap
+            wheelIndices.push_back(centerBack);
+            wheelIndices.push_back(next * 2 + 1);
+            wheelIndices.push_back(i * 2 + 1);
+        }
+        
+        wheelNumIndices = wheelIndices.size();
+        
+        glGenVertexArrays(1, &wheelVao);
+        glGenBuffers(1, &wheelVbo);
+        glGenBuffers(1, &wheelEbo);
+        glBindVertexArray(wheelVao);
+        glBindBuffer(GL_ARRAY_BUFFER, wheelVbo);
+        glBufferData(GL_ARRAY_BUFFER, wheelVertices.size() * sizeof(float), wheelVertices.data(), GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wheelEbo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, wheelIndices.size() * sizeof(unsigned int), wheelIndices.data(), GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glBindVertexArray(0);
     }
 }
 
@@ -100,6 +188,21 @@ Vehicle::~Vehicle()
         {
             glDeleteBuffers(1, &ebo);
             ebo = 0;
+        }
+        if (wheelVao)
+        {
+            glDeleteVertexArrays(1, &wheelVao);
+            wheelVao = 0;
+        }
+        if (wheelVbo)
+        {
+            glDeleteBuffers(1, &wheelVbo);
+            wheelVbo = 0;
+        }
+        if (wheelEbo)
+        {
+            glDeleteBuffers(1, &wheelEbo);
+            wheelEbo = 0;
         }
     }
 
@@ -149,13 +252,14 @@ void Vehicle::step(float deltaTime)
         }
     }
 
-    // Simple spring-damper parameters
-    float restLength = SUSPENSION_TRAVEL + WHEEL_RADIUS; // ray length from mount
-    float k = SUSPENSION_STIFFNESS; // N/m spring stiffness
     for (int i = 0; i < 4; ++i)
     {
         // Wheel mount position in world using quaternion rotation
-        glm::vec3 mountWorld = body->position + body->orientation * wheels[i].localPosition;
+        glm::vec3 mountWorld = body->position + body->orientation * (wheels[i].localPosition - glm::vec3(0.0f, wheels[i].wheelRadius, 0.0f));
+        
+        glm::vec3 suspAxisWorld = body->orientation * glm::vec3(0.0f, -1.0f, 0.0f);
+
+        float k = wheels[i].suspensionStiffness;
 
         // Raycast to infinite plane y=0 along suspAxisWorld
         // Solve mountWorld + suspAxisWorld * t => y = 0
@@ -170,7 +274,7 @@ void Vehicle::step(float deltaTime)
         }
 
         // Limit to suspension reach
-        if (t > restLength) {
+        if (t > wheels[i].restLength) {
             wheels[i].hasContact = false;
             continue; // no contact within suspension
         }
@@ -180,7 +284,7 @@ void Vehicle::step(float deltaTime)
         wheels[i].hasContact = true;
 
         // Compression is how much shorter than rest the ray is
-        float compression = restLength - t;
+        float compression = wheels[i].restLength - t;
         float compressionVelocity = (compression - wheels[i].compression) / deltaTime;
         float forceMag = k * compression + SUSPENSION_DAMPING * compressionVelocity + wheels[i].antiRollForce;
 
@@ -239,6 +343,9 @@ void Vehicle::step(float deltaTime)
         {
             wheels[i].angularVelocity = 0.0f;
         }
+
+        // Update roll angle for rendering
+        wheels[i].rollAngle += wheels[i].angularVelocity * deltaTime;
     }
 
     body->applyForce(-body->velocity * glm::length(body->velocity) * 0.4f); // Simple drag
@@ -256,6 +363,39 @@ void Vehicle::draw(int locModel, int locColor)
     glBindVertexArray(vao);
     glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
+
+    // Draw wheels
+    if (wheelVao != 0)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            // Calculate wheel position in world space
+            glm::vec3 mountWorld = body->position + body->orientation * wheels[i].localPosition;
+            
+            // Apply suspension compression
+            glm::vec3 suspAxisWorld = body->orientation * glm::vec3(0.0f, -1.0f, 0.0f);
+            float currentLength = wheels[i].restLength - wheels[i].compression;
+            glm::vec3 wheelPosition = mountWorld + suspAxisWorld * currentLength;
+            
+            // Create wheel transformation matrix
+            glm::mat4 wheelModel = glm::translate(glm::mat4(1.0f), wheelPosition);
+            
+            // Apply vehicle body rotation
+            glm::mat4 bodyRotation = glm::mat4_cast(body->orientation);
+            wheelModel = wheelModel * bodyRotation;
+            
+            wheelModel = glm::rotate(wheelModel, glm::radians(90.0f),  glm::vec3(0.0f, 0.0f, 1.0f));
+            wheelModel = glm::rotate(wheelModel, wheels[i].steerAngle, glm::vec3(1.0f, 0.0f, 0.0f));
+            wheelModel = glm::rotate(wheelModel, wheels[i].rollAngle,  glm::vec3(0.0f, 1.0f, 0.0f));
+
+            glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(wheelModel));
+            glUniform3f(locColor, 0.0f, 0.0f, 0.0f); // Black color for wheels
+            
+            glBindVertexArray(wheelVao);
+            glDrawElements(GL_TRIANGLES, wheelNumIndices, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
+    }
 }
 
 void Vehicle::setSteerAmount(float steer)
