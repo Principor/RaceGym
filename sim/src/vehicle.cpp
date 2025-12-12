@@ -8,8 +8,8 @@
 #include <iostream>
 #include <algorithm>
 
-Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation, bool enableGraphics)
-    : world(world), graphicsEnabled(enableGraphics)
+Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation)
+    : world(world)
 {
     CollisionShape* boxShape = new BoxShape(VEHICLE_DIMENSIONS / 2.0f); // Example dimensions
     // Convert Euler angles to quaternion: rotation is assumed to be (pitch, yaw, roll)
@@ -43,11 +43,7 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
     brake = 0.0f;
 
     // Create a simple box for rendering (only if graphics are enabled)
-    vao = vbo = ebo = 0;
-    wheelVao = wheelVbo = wheelEbo = 0;
-    numIndices = 36;
-    wheelNumIndices = 0;
-    if (graphicsEnabled)
+    if (Renderer::is_initialized())
     {
         float w = VEHICLE_DIMENSIONS.x;
         float h = VEHICLE_DIMENSIONS.y;
@@ -70,17 +66,7 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
             0, 3, 7, 7, 4, 0,
             1, 2, 6, 6, 5, 1,
         };
-        glGenVertexArrays(1, &vao);
-        glGenBuffers(1, &vbo);
-        glGenBuffers(1, &ebo);
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glBindVertexArray(0);
+        chassisMesh = Renderer::createMesh(vertices, 8, indices, 36);
 
         // Create wheel cylinder mesh
         std::vector<float> wheelVertices;
@@ -152,58 +138,16 @@ Vehicle::Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3
             wheelIndices.push_back(next * 2 + 1);
             wheelIndices.push_back(i * 2 + 1);
         }
-        
-        wheelNumIndices = wheelIndices.size();
-        
-        glGenVertexArrays(1, &wheelVao);
-        glGenBuffers(1, &wheelVbo);
-        glGenBuffers(1, &wheelEbo);
-        glBindVertexArray(wheelVao);
-        glBindBuffer(GL_ARRAY_BUFFER, wheelVbo);
-        glBufferData(GL_ARRAY_BUFFER, wheelVertices.size() * sizeof(float), wheelVertices.data(), GL_STATIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wheelEbo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, wheelIndices.size() * sizeof(unsigned int), wheelIndices.data(), GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-        glBindVertexArray(0);
+        wheelMesh = Renderer::createMesh(wheelVertices.data(), wheelVertices.size() / 3, wheelIndices.data(), wheelIndices.size());
     }
 }
 
 Vehicle::~Vehicle()
 {
-    if (graphicsEnabled)
+    if(Renderer::is_initialized())
     {
-
-        if (vao)
-        {
-            glDeleteVertexArrays(1, &vao);
-            vao = 0;
-        }
-        if (vbo)
-        {
-            glDeleteBuffers(1, &vbo);
-            vbo = 0;
-        }
-        if (ebo)
-        {
-            glDeleteBuffers(1, &ebo);
-            ebo = 0;
-        }
-        if (wheelVao)
-        {
-            glDeleteVertexArrays(1, &wheelVao);
-            wheelVao = 0;
-        }
-        if (wheelVbo)
-        {
-            glDeleteBuffers(1, &wheelVbo);
-            wheelVbo = 0;
-        }
-        if (wheelEbo)
-        {
-            glDeleteBuffers(1, &wheelEbo);
-            wheelEbo = 0;
-        }
+        Renderer::destroyMesh(chassisMesh);
+        Renderer::destroyMesh(wheelMesh);
     }
 
     world.removeBody(body);
@@ -353,48 +297,37 @@ void Vehicle::step(float deltaTime)
 
 void Vehicle::draw(int locModel, int locColor)
 {
-    if (!graphicsEnabled || vao == 0)
+
+    if(!Renderer::is_initialized())
         return;
+
     glm::mat4 model = body->getModelMatrix();
 
-    glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(model));
-    glUniform3f(locColor, 0.8f, 0.0f, 0.0f); // Red color for vehicle
-
-    glBindVertexArray(vao);
-    glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
+    Renderer::drawMesh(chassisMesh, model, glm::vec3(0.8f, 0.0f, 0.0f)); // Red color for vehicle
 
     // Draw wheels
-    if (wheelVao != 0)
+    for (int i = 0; i < 4; ++i)
     {
-        for (int i = 0; i < 4; ++i)
-        {
-            // Calculate wheel position in world space
-            glm::vec3 mountWorld = body->position + body->orientation * wheels[i].localPosition;
-            
-            // Apply suspension compression
-            glm::vec3 suspAxisWorld = body->orientation * glm::vec3(0.0f, -1.0f, 0.0f);
-            float currentLength = wheels[i].restLength - wheels[i].compression;
-            glm::vec3 wheelPosition = mountWorld + suspAxisWorld * currentLength;
-            
-            // Create wheel transformation matrix
-            glm::mat4 wheelModel = glm::translate(glm::mat4(1.0f), wheelPosition);
-            
-            // Apply vehicle body rotation
-            glm::mat4 bodyRotation = glm::mat4_cast(body->orientation);
-            wheelModel = wheelModel * bodyRotation;
-            
-            wheelModel = glm::rotate(wheelModel, glm::radians(90.0f),  glm::vec3(0.0f, 0.0f, 1.0f));
-            wheelModel = glm::rotate(wheelModel, wheels[i].steerAngle, glm::vec3(1.0f, 0.0f, 0.0f));
-            wheelModel = glm::rotate(wheelModel, wheels[i].rollAngle,  glm::vec3(0.0f, 1.0f, 0.0f));
+        // Calculate wheel position in world space
+        glm::vec3 mountWorld = body->position + body->orientation * wheels[i].localPosition;
+        
+        // Apply suspension compression
+        glm::vec3 suspAxisWorld = body->orientation * glm::vec3(0.0f, -1.0f, 0.0f);
+        float currentLength = wheels[i].restLength - wheels[i].compression;
+        glm::vec3 wheelPosition = mountWorld + suspAxisWorld * currentLength;
+        
+        // Create wheel transformation matrix
+        glm::mat4 wheelModel = glm::translate(glm::mat4(1.0f), wheelPosition);
+        
+        // Apply vehicle body rotation
+        glm::mat4 bodyRotation = glm::mat4_cast(body->orientation);
+        wheelModel = wheelModel * bodyRotation;
 
-            glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(wheelModel));
-            glUniform3f(locColor, 0.0f, 0.0f, 0.0f); // Black color for wheels
-            
-            glBindVertexArray(wheelVao);
-            glDrawElements(GL_TRIANGLES, wheelNumIndices, GL_UNSIGNED_INT, 0);
-            glBindVertexArray(0);
-        }
+        wheelModel = glm::rotate(wheelModel, glm::radians(90.0f),  glm::vec3(0.0f, 0.0f, 1.0f));
+        wheelModel = glm::rotate(wheelModel, wheels[i].steerAngle, glm::vec3(1.0f, 0.0f, 0.0f));
+        wheelModel = glm::rotate(wheelModel, wheels[i].rollAngle,  glm::vec3(0.0f, 1.0f, 0.0f));
+
+        Renderer::drawMesh(wheelMesh, wheelModel, glm::vec3(0.0f, 0.0f, 0.0f)); // Black color for wheels
     }
 }
 

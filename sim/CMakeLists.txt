@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(racegym_sim SHARED 
     src/sim.cpp
     src/sim.h
+    src/renderer.cpp
+    src/renderer.h
     src/track.cpp
     src/track.h
     src/physics.cpp

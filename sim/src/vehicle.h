@@ -5,6 +5,7 @@
 #include <array>
 #include <glm/glm.hpp>
 #include "physics.h"
+#include "renderer.h"
 
 const glm::vec3 VEHICLE_DIMENSIONS(2.0f, 1.0f, 4.0f); // Width, Height, Length in meters
 const float VEHICLE_MASS = 1200.0f; // in kg
@@ -66,7 +67,7 @@ public:
     PhysicsWorld &world;
     PhysicsBody *body;
 
-    Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation, bool enableGraphics);
+    Vehicle(PhysicsWorld &world, const glm::vec3 &position, const glm::vec3 &rotation);
     ~Vehicle();
 
     void step(float deltaTime);
@@ -78,13 +79,7 @@ public:
     bool isOffTrack(class Track* track) const;
 
 private:
-    bool graphicsEnabled;
-    // Rendering data
-    int numIndices;
-    unsigned int vao, vbo, ebo;
-    // Wheel rendering data
-    int wheelNumIndices;
-    unsigned int wheelVao, wheelVbo, wheelEbo;
+    Mesh chassisMesh, wheelMesh;
 
     std::array<Wheel, 4> wheels;
 

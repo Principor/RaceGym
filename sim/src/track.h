@@ -4,20 +4,19 @@
 
 #include <vector>
 #include <glm/glm.hpp>
+#include "renderer.h"
 
 class Track {
-    bool graphicsEnabled;
     std::vector<glm::vec2> points;
     int numSegments;
 
-    int numIndices;
-    unsigned int vao, vbo, ebo;
+    Mesh trackMesh;
 
     bool loadPointsFromFile(const char* path);
     void generateGeometry();
 
 public:
-    Track(const char* path, bool enableGraphics);
+    Track(const char* path);
     ~Track();
 
     void draw(int locModel, int locColor);

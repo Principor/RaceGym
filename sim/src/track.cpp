@@ -11,8 +11,7 @@
 
 #define TRACK_WIDTH 12.0f
 
-Track::Track(const char *path, bool enableGraphics)
-	: graphicsEnabled(enableGraphics), vao(0), vbo(0), ebo(0)
+Track::Track(const char *path)
 {
 	if (loadPointsFromFile(path))
 	{
@@ -22,36 +21,16 @@ Track::Track(const char *path, bool enableGraphics)
 
 Track::~Track()
 {
-	if (!graphicsEnabled)
-		return;
-	if (vao)
-	{
-		glDeleteVertexArrays(1, &vao);
-		vao = 0;
-	}
-	if (vbo)
-	{
-		glDeleteBuffers(1, &vbo);
-		vbo = 0;
-	}
-	if (ebo)
-	{
-		glDeleteBuffers(1, &ebo);
-		ebo = 0;
-	}
+	if(Renderer::is_initialized())
+		Renderer::destroyMesh(trackMesh);
 }
 
 void Track::draw(int locModel, int locColor)
 {
-	if (!graphicsEnabled || vao == 0)
+	if(!Renderer::is_initialized())
 		return;
 
-	glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
-	glUniform3f(locColor, 0.2f, 0.2f, 0.2f); // Dark gray/black for track
-
-	glBindVertexArray(vao);
-	glDrawElements(GL_TRIANGLE_STRIP, static_cast<GLsizei>(numIndices), GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
+	Renderer::drawMesh(trackMesh, glm::mat4(1.0f), glm::vec3(0.2f, 0.2f, 0.2f), GL_TRIANGLE_STRIP);
 }
 
 glm::vec2 Track::getPosition(float t)
@@ -220,7 +199,7 @@ bool Track::loadPointsFromFile(const char *path)
 
 void Track::generateGeometry()
 {
-	if (!graphicsEnabled)
+	if (!Renderer::is_initialized())
 		return;
 
 	if (points.empty())
@@ -250,30 +229,14 @@ void Track::generateGeometry()
 	}
 
 	// Generate EBO
-	numIndices = resolution * 2;
+	int numIndices = resolution * 2;
 	std::vector<unsigned int> indices(numIndices);
 	for (unsigned int i = 0; i < numIndices; ++i)
 	{
 		indices[i] = i;
 	}
 
-	// Create VAO and bind buffers within it
-	glGenVertexArrays(1, &vao);
-	glGenBuffers(1, &vbo);
-	glGenBuffers(1, &ebo);
-
-	glBindVertexArray(vao);
-
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, vertexData.size() * sizeof(float), vertexData.data(), GL_STATIC_DRAW);
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
-
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-
-	glBindVertexArray(0);
+	trackMesh = Renderer::createMesh(vertexData.data(), static_cast<int>(vertexData.size() / 3), indices.data(), static_cast<int>(indices.size()));
 }
 
 float Track::getClosestT(const glm::vec2 &position)
