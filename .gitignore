@@ -65,4 +65,5 @@ tensorboard_logs/
 
 # Training checkpoints
 checkpoints/
-ppo_racegym_final.zip
+*.zip
+*.pkl

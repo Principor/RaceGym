@@ -2,6 +2,8 @@ import time
 import gymnasium as gym
 import numpy as np
 from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from stable_baselines3.common.monitor import Monitor
 
 from racegym.env import RaceGymEnv
 
@@ -15,6 +17,9 @@ def render_trained_agent(model_path="ppo_racegym_final.zip", num_episodes=5):
     """
     # Create environment with human rendering
     env = RaceGymEnv(render_mode="human", fixed_start=True)
+    env = Monitor(env)
+    env = DummyVecEnv([lambda: env])
+    env = VecNormalize.load("ppo_racegym_vecnormalize_final.pkl", env)  # Load normalization stats if available
     
     # Load the trained model
     print(f"Loading model from {model_path}...")
@@ -23,27 +28,27 @@ def render_trained_agent(model_path="ppo_racegym_final.zip", num_episodes=5):
     print(f"Rendering {num_episodes} episodes...")
     
     for episode in range(num_episodes):
-        obs, info = env.reset()
-        done = False
-        truncated = False
-        episode_reward = 0
+        obs = env.reset()
+        done = np.array([False])
+        episode_reward = 0.0
         step_count = 0
         
         print(f"\n--- Episode {episode + 1} ---")
         
-        while not (done or truncated):
+        while not done[0]:
             # Get action from the trained model
             action, _states = model.predict(obs, deterministic=False)
             
             # Take action in environment
-            obs, reward, done, truncated, info = env.step(action)
-            episode_reward += reward
+            obs, reward, done, info = env.step(action)
+            episode_reward += reward[0]
             step_count += 1
                 
-            if "lap_time" in info:
-                print(f"Previous lap time: {info['lap_time']:.2f} seconds")
-            if "total_distance" in info:
-                print(f"Total distance traveled: {info['total_distance']:.2f} segments")
+            info_dict = info[0] if isinstance(info, (list, tuple)) else info
+            if "lap_time" in info_dict:
+                print(f"Previous lap time: {info_dict['lap_time']:.2f} seconds")
+            if "total_distance" in info_dict:
+                print(f"Total distance traveled: {info_dict['total_distance']:.2f} segments")
             
         
         print(f"Episode {episode + 1} finished:")
